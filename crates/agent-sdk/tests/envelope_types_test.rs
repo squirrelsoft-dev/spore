@@ -128,3 +128,50 @@ fn tool_call_record_json_round_trip_with_nested_values() {
 
     assert_eq!(original, deserialized);
 }
+
+#[test]
+fn agent_request_none_fields_round_trip() {
+    let original = AgentRequest {
+        id: Uuid::nil(),
+        input: "test input".to_string(),
+        context: None,
+        caller: None,
+    };
+
+    let json_str = serde_json::to_string(&original).unwrap();
+    let deserialized: AgentRequest = serde_json::from_str(&json_str).unwrap();
+
+    assert_eq!(original, deserialized);
+}
+
+#[test]
+fn agent_response_empty_tool_calls_round_trip() {
+    let original = AgentResponse {
+        id: Uuid::nil(),
+        output: json!("done"),
+        confidence: 0.75,
+        escalated: true,
+        tool_calls: vec![],
+    };
+
+    let json_str = serde_json::to_string(&original).unwrap();
+    let deserialized: AgentResponse = serde_json::from_str(&json_str).unwrap();
+
+    assert_eq!(original, deserialized);
+}
+
+#[test]
+fn agent_error_equality() {
+    assert_eq!(
+        AgentError::MaxTurnsExceeded { turns: 5 },
+        AgentError::MaxTurnsExceeded { turns: 5 }
+    );
+    assert_ne!(
+        AgentError::Internal("a".to_string()),
+        AgentError::Internal("b".to_string())
+    );
+    assert_ne!(
+        AgentError::Internal("x".to_string()),
+        AgentError::MaxTurnsExceeded { turns: 1 }
+    );
+}
