@@ -43,7 +43,7 @@ fn agent_response_json_round_trip_with_tool_calls() {
     let original = AgentResponse {
         id: Uuid::nil(),
         output: json!({"answer": 42}),
-        confidence: 0.85,
+        confidence: 0.875,
         escalated: true,
         tool_calls: vec![ToolCallRecord {
             tool_name: "search".to_string(),
