@@ -11,7 +11,7 @@
 - Run tests before marking any task complete
 
 # Common Mistakes
-- (add rules here as you discover repeated issues)
+- At the end of the work command, do not merge, do not copy from worktrees to the main tree, do not cherry-pick. Stop work and inform the user that they can run the work-merge command
 
 # Learnings
 - (add patterns from PR reviews here)

@@ -7,7 +7,6 @@ description: 'Pick the next task grouping from a breakdown and spin up an agent 
 Pick a task grouping from a task breakdown and spin up an agent team to implement it, guided by the specs.
 
 > **This command stops after agents complete.** It does NOT run quality gates or merge branches.
-> Run `/work-merge` next to gate, review, and merge the work into the feature branch.
 
 **Input:** `$ARGUMENTS` — optional task list name (maps to `.claude/tasks/$ARGUMENTS.md`). If omitted, the user picks from available task lists.
 
@@ -110,27 +109,74 @@ After all agents finish (success or failure), write a session state file at:
 .claude/work-sessions/<task-group-name>.json
 ```
 
-This file is required by `/work-merge`. Write it using the `Edit` tool with this structure:
+This file is the **only input** `/work-merge` accepts. If the schema is wrong, `/work-merge` will fail or behave unpredictably.
+
+#### Required schema — copy this structure exactly
+
+The example below shows a completed run for task list `issue-2`, group 3, with two agents. Use it as a direct template — substitute real values for the placeholders, keep every key name identical.
 
 ```json
 {
-  "taskListName": "<task-list-name>",
-  "taskGroupName": "<task-group-name>",
-  "featureBranch": "feat/<task-group-name>",
-  "groupNumber": <N>,
+  "taskListName": "issue-2",
+  "taskGroupName": "issue-2-group-3",
+  "featureBranch": "feat/issue-2-group-3",
+  "groupNumber": 3,
   "agents": [
     {
       "agentNumber": 1,
-      "taskTitle": "<task title>",
-      "worktreeBranch": "work/<task-group-name>-1",
-      "status": "success" | "failed",
-      "specFile": ".claude/specs/<task-list-name>/<task-title-kebab>.md"
+      "taskTitle": "Add database migrations",
+      "worktreeBranch": "work/issue-2-group-3-1",
+      "status": "success",
+      "specFile": ".claude/specs/issue-2/add-database-migrations.md"
+    },
+    {
+      "agentNumber": 2,
+      "taskTitle": "Write unit tests",
+      "worktreeBranch": "work/issue-2-group-3-2",
+      "status": "failed",
+      "specFile": ".claude/specs/issue-2/write-unit-tests.md"
     }
   ]
 }
 ```
 
-Include one entry per agent. Set `status` to `"success"` or `"failed"` based on the agent's reported outcome.
+#### Field rules
+
+| Field | Type | Rule |
+|---|---|---|
+| `taskListName` | string | The task list file name without `.md` (e.g. `issue-2`) |
+| `taskGroupName` | string | `<taskListName>-group-<N>` (e.g. `issue-2-group-3`) |
+| `featureBranch` | string | Always `feat/<taskGroupName>` |
+| `groupNumber` | number | The integer group number, not a string |
+| `agents[].agentNumber` | number | Sequential integer starting at 1 |
+| `agents[].taskTitle` | string | Exact task title as it appears in the task list (spaces, not kebab) |
+| `agents[].worktreeBranch` | string | Must start with `work/` — never `feat/` |
+| `agents[].status` | string | Exactly `"success"` or `"failed"` — no other values |
+| `agents[].specFile` | string | Full relative path to the spec file |
+
+#### Common mistakes — do not do these
+
+- ❌ Using `"group"` instead of `"taskGroupName"`
+- ❌ Using `"branch"` instead of `"featureBranch"`
+- ❌ Using `"name"` instead of `"taskTitle"`
+- ❌ Setting `worktreeBranch` to a `feat/` branch — it must be a `work/` branch
+- ❌ Using `"complete"` or `"done"` as a status — only `"success"` or `"failed"` are valid
+- ❌ Adding extra fields like `"verification"`, `"tasks"`, or `"status"` at the top level
+
+#### Self-validation — check before saving
+
+Before writing the file, verify each item in this checklist:
+
+- [ ] Top-level keys are exactly: `taskListName`, `taskGroupName`, `featureBranch`, `groupNumber`, `agents`
+- [ ] `taskGroupName` matches the pattern `<taskListName>-group-<N>`
+- [ ] `featureBranch` starts with `feat/`
+- [ ] `groupNumber` is a number (not a string)
+- [ ] Every agent entry has exactly these keys: `agentNumber`, `taskTitle`, `worktreeBranch`, `status`, `specFile`
+- [ ] Every `worktreeBranch` starts with `work/`
+- [ ] Every `status` is either `"success"` or `"failed"`
+- [ ] No extra keys exist anywhere in the document
+
+If any item is not checked, fix the JSON before writing it.
 
 ### 9. Summary
 
