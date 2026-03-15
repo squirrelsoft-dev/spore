@@ -5,7 +5,7 @@ INPUT=$(cat)
 CMD=$(echo "$INPUT" | jq -r '.tool_input.command // empty')
 
 # Block destructive patterns
-if echo "$CMD" | grep -qEi '(rm -rf /|DROP TABLE|DROP DATABASE|truncate |DELETE FROM .* WHERE 1|force push|--force|> /dev/sd|mkfs|dd if=)'; then
+if echo "$CMD" | grep -qEi '(rm -rf /|DROP TABLE|DROP DATABASE|truncate |DELETE FROM .* WHERE 1|force push|\s--force(\s|$)|> /dev/sd|mkfs|dd if=)'; then
   echo '{"decision":"block","reason":"Blocked: destructive command detected. Rephrase with a safer approach."}'
   exit 0
 fi
