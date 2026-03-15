@@ -7,7 +7,7 @@ CHANGED=$(git diff --name-only --diff-filter=ACM HEAD 2>/dev/null)
 
 ERRORS=""
 
-# 1. Secret detection (changed files only)
+# 1. Secret detection (full project source)
 if command -v gitleaks &>/dev/null; then
   SECRETS=$(gitleaks detect --no-git --source=. --verbose 2>&1 | grep -E "Secret|Finding")
   [ -n "$SECRETS" ] && ERRORS="$ERRORS\n## 🔑 Secrets Detected\n$SECRETS"
