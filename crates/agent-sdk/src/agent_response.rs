@@ -1,5 +1,7 @@
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use uuid::Uuid;
 
 use crate::tool_call_record::ToolCallRecord;
 
@@ -13,7 +15,7 @@ pub struct AgentResponse {
 }
 
 impl AgentResponse {
-    pub fn success(id: uuid::Uuid, output: serde_json::Value) -> Self {
+    pub fn success(id: Uuid, output: Value) -> Self {
         Self {
             id,
             output,
