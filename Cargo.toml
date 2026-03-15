@@ -1,0 +1,9 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/agent-sdk",
+    "crates/skill-loader",
+    "crates/tool-registry",
+    "crates/agent-runtime",
+    "crates/orchestrator",
+]
