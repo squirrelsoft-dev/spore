@@ -5,8 +5,8 @@ use crate::tool_call_record::ToolCallRecord;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize, JsonSchema)]
 pub struct AgentResponse {
-    pub id: uuid::Uuid,
-    pub output: serde_json::Value,
+    pub id: Uuid,
+    pub output: Value,
     pub confidence: f32,
     pub escalated: bool,
     pub tool_calls: Vec<ToolCallRecord>,
