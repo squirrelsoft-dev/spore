@@ -1,14 +1,7 @@
 use agent_sdk::{SkillManifest, ALLOWED_OUTPUT_FORMATS};
+use tool_registry::ToolExists;
 
 use crate::SkillError;
-
-/// Trait for checking whether a tool name is registered.
-///
-/// Used by the `validate` function to verify that all tool names
-/// referenced in a `SkillManifest` actually exist in the runtime.
-pub trait ToolExists {
-    fn tool_exists(&self, name: &str) -> bool;
-}
 
 /// Stub implementation that always returns `true`.
 ///

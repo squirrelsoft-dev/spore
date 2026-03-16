@@ -3,7 +3,8 @@ mod frontmatter;
 pub mod validation;
 
 pub use error::SkillError;
-pub use validation::{AllToolsExist, ToolExists, validate};
+pub use tool_registry::ToolExists;
+pub use validation::{AllToolsExist, validate};
 
 use std::path::PathBuf;
 use std::sync::Arc;

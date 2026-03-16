@@ -12,7 +12,7 @@ fn skills_dir() -> std::path::PathBuf {
 }
 
 fn make_loader(dir: &std::path::Path) -> SkillLoader {
-    let registry = Arc::new(ToolRegistry);
+    let registry = Arc::new(ToolRegistry::new());
     SkillLoader::new(dir.to_path_buf(), registry, Box::new(AllToolsExist))
 }
 

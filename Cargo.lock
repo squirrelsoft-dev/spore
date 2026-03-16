@@ -419,6 +419,12 @@ dependencies = [
 [[package]]
 name = "tool-registry"
 version = "0.1.0"
+dependencies = [
+ "agent-sdk",
+ "schemars",
+ "serde",
+ "serde_json",
+]
 
 [[package]]
 name = "unicode-ident"
