@@ -13,6 +13,7 @@ mod micro_agent;
 pub use constraints::Constraints;
 pub use model_config::ModelConfig;
 pub use output_schema::OutputSchema;
+pub use output_schema::ALLOWED_OUTPUT_FORMATS;
 pub use skill_manifest::SkillManifest;
 
 pub use tool_call_record::ToolCallRecord;

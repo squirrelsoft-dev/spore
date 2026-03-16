@@ -1,7 +1,9 @@
 mod error;
 mod frontmatter;
+pub mod validation;
 
 pub use error::SkillError;
+pub use validation::{AllToolsExist, ToolExists, validate};
 
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -13,13 +15,19 @@ pub struct SkillLoader {
     skill_dir: PathBuf,
     #[allow(dead_code)]
     tool_registry: Arc<ToolRegistry>,
+    tool_checker: Box<dyn ToolExists + Send + Sync>,
 }
 
 impl SkillLoader {
-    pub fn new(skill_dir: PathBuf, tool_registry: Arc<ToolRegistry>) -> Self {
+    pub fn new(
+        skill_dir: PathBuf,
+        tool_registry: Arc<ToolRegistry>,
+        tool_checker: Box<dyn ToolExists + Send + Sync>,
+    ) -> Self {
         Self {
             skill_dir,
             tool_registry,
+            tool_checker,
         }
     }
 
@@ -47,7 +55,7 @@ impl SkillLoader {
                 source: err.to_string(),
             })?;
 
-        Ok(SkillManifest {
+        let manifest = SkillManifest {
             name: fm.name,
             version: fm.version,
             description: fm.description,
@@ -56,6 +64,8 @@ impl SkillLoader {
             tools: fm.tools,
             constraints: fm.constraints,
             output: fm.output,
-        })
+        };
+        validate(&manifest, &*self.tool_checker)?;
+        Ok(manifest)
     }
 }
