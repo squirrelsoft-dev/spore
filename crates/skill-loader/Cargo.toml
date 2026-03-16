@@ -4,3 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_yaml = "0.9"
+agent-sdk = { path = "../agent-sdk" }
+tool-registry = { path = "../tool-registry" }
+tokio = { version = "1", features = ["fs"] }
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt"] }
+tempfile = "3"
