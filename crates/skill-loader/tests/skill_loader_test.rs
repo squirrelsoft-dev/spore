@@ -1,13 +1,13 @@
 use std::sync::Arc;
 
-use skill_loader::{SkillError, SkillLoader};
+use skill_loader::{AllToolsExist, SkillError, SkillLoader};
 use tempfile::tempdir;
 use tokio::fs;
 use tool_registry::ToolRegistry;
 
 fn make_loader(dir: &std::path::Path) -> SkillLoader {
     let registry = Arc::new(ToolRegistry);
-    SkillLoader::new(dir.to_path_buf(), registry)
+    SkillLoader::new(dir.to_path_buf(), registry, Box::new(AllToolsExist))
 }
 
 #[tokio::test]
@@ -61,7 +61,7 @@ You are a summarization assistant.";
     assert!(
         (manifest.constraints.confidence_threshold - 0.85).abs() < f64::EPSILON
     );
-    assert_eq!(manifest.constraints.escalate_to, "human_reviewer");
+    assert_eq!(manifest.constraints.escalate_to, Some("human_reviewer".to_string()));
     assert_eq!(
         manifest.constraints.allowed_actions,
         vec!["summarize", "clarify"]
@@ -174,9 +174,16 @@ output:
         .unwrap();
 
     let loader = make_loader(dir.path());
-    let manifest = loader.load("minimal").await.unwrap();
+    let result = loader.load("minimal").await;
+    assert!(result.is_err());
 
-    assert_eq!(manifest.preamble, "");
+    let err = result.unwrap_err();
+    match err {
+        SkillError::ValidationError { reasons, .. } => {
+            assert!(reasons.iter().any(|r| r == "'preamble' must not be empty"));
+        }
+        other => panic!("expected ValidationError, got: {:?}", other),
+    }
 }
 
 #[tokio::test]
@@ -201,7 +208,7 @@ constraints:
     - search
     - analyze
 output:
-  format: markdown
+  format: text
   schema:
     report: string
 ---

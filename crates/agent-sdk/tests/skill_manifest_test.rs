@@ -47,7 +47,10 @@ fn deserialize_readme_skill_file() {
 
     assert_eq!(manifest.constraints.max_turns, 5);
     assert!((manifest.constraints.confidence_threshold - 0.85).abs() < f64::EPSILON);
-    assert_eq!(manifest.constraints.escalate_to, "human_reviewer");
+    assert_eq!(
+        manifest.constraints.escalate_to,
+        Some("human_reviewer".to_string())
+    );
     assert_eq!(
         manifest.constraints.allowed_actions,
         vec!["summarize", "clarify"]
@@ -75,7 +78,7 @@ fn serialize_deserialize_round_trip() {
         constraints: Constraints {
             max_turns: 10,
             confidence_threshold: 0.9,
-            escalate_to: "senior_analyst".to_string(),
+            escalate_to: Some("senior_analyst".to_string()),
             allowed_actions: vec!["analyze".to_string(), "report".to_string()],
         },
         output: OutputSchema {
@@ -151,4 +154,69 @@ output:
         serde_yaml::from_str(yaml).expect("failed to deserialize YAML with empty schema");
 
     assert!(manifest.output.schema.is_empty());
+}
+
+#[test]
+fn deserialize_missing_escalate_to() {
+    let yaml = r#"
+name: no-escalation
+version: "1.0"
+description: Skill without escalation
+model:
+  provider: anthropic
+  name: claude-3-haiku
+  temperature: 0.5
+preamble: You are an assistant.
+tools:
+  - web_search
+constraints:
+  max_turns: 3
+  confidence_threshold: 0.7
+  allowed_actions:
+    - search
+output:
+  format: text
+  schema:
+    body: string
+"#;
+
+    let manifest: SkillManifest =
+        serde_yaml::from_str(yaml).expect("failed to deserialize YAML without escalate_to");
+
+    assert_eq!(manifest.constraints.escalate_to, None);
+}
+
+#[test]
+fn round_trip_none_escalate_to() {
+    let original = SkillManifest {
+        name: "no-escalation".to_string(),
+        version: "1.0".to_string(),
+        description: "Skill without escalation".to_string(),
+        model: ModelConfig {
+            provider: "anthropic".to_string(),
+            name: "claude-3-haiku".to_string(),
+            temperature: 0.5,
+        },
+        preamble: "You are an assistant.".to_string(),
+        tools: vec!["web_search".to_string()],
+        constraints: Constraints {
+            max_turns: 3,
+            confidence_threshold: 0.7,
+            escalate_to: None,
+            allowed_actions: vec!["search".to_string()],
+        },
+        output: OutputSchema {
+            format: "text".to_string(),
+            schema: HashMap::from([("body".to_string(), "string".to_string())]),
+        },
+    };
+
+    let yaml = serde_yaml::to_string(&original).expect("failed to serialize");
+    assert!(
+        !yaml.contains("escalate_to"),
+        "YAML should not contain escalate_to when None"
+    );
+
+    let deserialized: SkillManifest = serde_yaml::from_str(&yaml).expect("failed to deserialize");
+    assert_eq!(deserialized.constraints.escalate_to, None);
 }

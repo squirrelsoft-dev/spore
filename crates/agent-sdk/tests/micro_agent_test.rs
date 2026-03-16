@@ -27,7 +27,7 @@ fn make_manifest() -> SkillManifest {
         constraints: Constraints {
             max_turns: 10,
             confidence_threshold: 0.85,
-            escalate_to: "human".to_string(),
+            escalate_to: Some("human".to_string()),
             allowed_actions: vec!["test".to_string()],
         },
         output: OutputSchema {
