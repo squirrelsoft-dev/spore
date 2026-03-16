@@ -14,27 +14,21 @@ Every micro agent is two things:
 
 1. **Runtime** — A statically compiled Rust binary. No domain knowledge. It loads a skill file, connects to a language model, manages tool calls, enforces constraints, and returns structured output. Ships as a 1-5MB Docker image.
 
-2. **Skill file** — A YAML document declaring everything the agent needs: identity, system prompt, permitted tools, constraints, confidence thresholds, and output schema.
+2. **Skill file** — A markdown file with YAML frontmatter declaring everything the agent needs: identity, system prompt, permitted tools, constraints, confidence thresholds, and output schema.
 
-```yaml
+```markdown
+---
 name: cogs-analyst
-version: 1.0.0
+version: "1.0.0"
 description: Handles COGS-related finance queries
-
 model:
   provider: anthropic
   name: claude-sonnet-4-6
   temperature: 0.1
-
-preamble: |
-  You are a finance analyst specializing in Cost of Goods Sold analysis.
-  Never speculate. If confidence is below threshold, escalate.
-
 tools:
   - get_account_groups
   - execute_sql
   - query_store_lookup
-
 constraints:
   max_turns: 5
   confidence_threshold: 0.75
@@ -42,7 +36,6 @@ constraints:
   allowed_actions:
     - read
     - query
-
 output:
   format: structured_json
   schema:
@@ -50,6 +43,30 @@ output:
     explanation: string
     confidence: float
     source: string
+---
+You are a finance analyst agent specializing in Cost of Goods Sold (COGS) queries. Your role is to help users understand, analyze, and report on COGS data by writing precise SQL queries against the financial data warehouse.
+
+## Guidelines
+
+- Never speculate. If confidence is below threshold, escalate.
+- Always cite the source tables and account groups used in your analysis.
+- Prefer narrow queries over broad scans to minimize data warehouse load.
+- When multiple interpretations of a question are possible, ask for clarification before executing.
+- Validate account group mappings before constructing queries.
+
+## Tool Usage
+
+- **get_account_groups**: Use first to resolve account group names and IDs relevant to the query. Always verify that the requested COGS categories exist before proceeding.
+- **execute_sql**: Use to run validated SQL against the data warehouse. Include appropriate filters and aggregations. Never run unbounded queries.
+- **query_store_lookup**: Use to check for previously answered similar queries. If a recent, high-confidence result exists, prefer reusing it over re-executing.
+
+## Output Format
+
+Return structured JSON with these fields:
+- `sql`: The exact SQL query executed or proposed
+- `explanation`: A plain-language summary of what the query does and what the results mean
+- `confidence`: Your confidence level (0.0 to 1.0) in the correctness of the result
+- `source`: The source tables and account groups referenced
 ```
 
 ## Architecture
@@ -62,7 +79,7 @@ spore/
 │   ├── tool-registry/      # Discovers and serves tools via MCP
 │   ├── orchestrator/       # Routes requests to agents
 │   └── agent-sdk/          # Shared traits and types
-├── skills/                 # Skill file definitions (YAML)
+├── skills/                 # Skill file definitions (markdown)
 ├── tools/                  # Tool implementations
 └── Cargo.toml
 ```
@@ -71,7 +88,7 @@ spore/
 
 **`agent-sdk`** — Shared contract. Defines `SkillManifest`, `MicroAgent` trait, and the `AgentRequest`/`AgentResponse` envelope. Everything else depends on this.
 
-**`skill-loader`** — Parses YAML skill files into typed `SkillManifest` structs. Validation is strict and happens at startup — if a skill references a tool that doesn't exist, the agent fails to start, not to respond.
+**`skill-loader`** — Parses markdown skill files with YAML frontmatter into typed `SkillManifest` structs. Validation is strict and happens at startup — if a skill references a tool that doesn't exist, the agent fails to start, not to respond.
 
 **`tool-registry`** — Tools run as MCP servers. The registry maps tool names to MCP endpoints and hands back handles the runtime can use. Tools are independently deployable and versioned. They have no knowledge of which agent calls them.
 
@@ -95,10 +112,10 @@ The system builds itself from two seed agents:
 
 | Seed Agent | Skill | What It Does |
 |---|---|---|
-| **Skill Writer** | `skill-writer.yaml` | Takes a plain-language capability description, produces a validated YAML skill file |
-| **Tool Coder** | `tool-coder.yaml` | Reads a skill file, identifies missing tools, implements them in Rust |
+| **Skill Writer** | `skill-writer.md` | Takes a plain-language capability description, produces a validated skill file |
+| **Tool Coder** | `tool-coder.md` | Reads a skill file, identifies missing tools, implements them in Rust |
 
-The third agent they produce together is the **Deploy Agent** (`deploy-agent.yaml`), which packages runtime + skill file into a Docker image and registers the endpoint. From that point the system is fully self-extending — new agents are described, written, tooled, and deployed entirely within the platform.
+The third agent they produce together is the **Deploy Agent** (`deploy-agent.md`), which packages runtime + skill file into a Docker image and registers the endpoint. From that point the system is fully self-extending — new agents are described, written, tooled, and deployed entirely within the platform.
 
 ## Tech Stack
 
