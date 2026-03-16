@@ -33,7 +33,13 @@ impl SkillLoader {
                 source: err.to_string(),
             })?;
 
-        let (yaml, body) = frontmatter::extract_frontmatter(&content)?;
+        let (yaml, body) = frontmatter::extract_frontmatter(&content).map_err(|err| match err {
+            SkillError::ParseError { source, .. } => SkillError::ParseError {
+                path: path.clone(),
+                source,
+            },
+            other => other,
+        })?;
 
         let fm: frontmatter::SkillFrontmatter =
             serde_yaml::from_str(yaml).map_err(|err| SkillError::ParseError {
