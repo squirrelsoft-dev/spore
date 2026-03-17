@@ -7,9 +7,9 @@ CHANGED=$(git diff --name-only --diff-filter=ACM HEAD 2>/dev/null)
 
 ERRORS=""
 
-# 1. Secret detection (full project source)
+# 1. Secret detection (changed files only)
 if command -v gitleaks &>/dev/null; then
-  SECRETS=$(gitleaks detect --no-git --source=. --verbose 2>&1 | grep -E "Secret|Finding")
+  SECRETS=$(echo "$CHANGED" | xargs -I{} gitleaks detect --no-git --source={} --verbose 2>&1 | grep -E "Secret|Finding")
   [ -n "$SECRETS" ] && ERRORS="$ERRORS\n## 🔑 Secrets Detected\n$SECRETS"
 fi
 
@@ -20,7 +20,7 @@ if command -v semgrep &>/dev/null; then
 fi
 
 # 3. Type check (TypeScript projects)
-if [ -f tsconfig.json ]; then
+if [ -f "$CLAUDE_PROJECT_DIR/tsconfig.json" ]; then
   TC=$(npx tsc --noEmit 2>&1)
   echo "$TC" | grep -q "error TS" && ERRORS="$ERRORS\n## ❌ Type Errors\n$(echo "$TC" | grep 'error TS' | head -20)"
 fi
@@ -30,7 +30,7 @@ TESTS=$(cargo test 2>&1)
 [ $? -ne 0 ] && ERRORS="$ERRORS\n## 🧪 Test Failures\n$(echo "$TESTS" | tail -20)"
 
 # 5. Dependency audit (quick)
-if command -v npm &>/dev/null && [ -f package.json ]; then
+if command -v npm &>/dev/null && [ -f "$CLAUDE_PROJECT_DIR/package.json" ]; then
   AUDIT=$(npm audit --audit-level=high 2>&1)
   echo "$AUDIT" | grep -q "high\|critical" && ERRORS="$ERRORS\n## 📦 Vulnerable Dependencies\n$(echo "$AUDIT" | tail -10)"
 fi

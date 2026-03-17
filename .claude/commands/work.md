@@ -1,208 +1,288 @@
 ---
-description: 'Pick the next task grouping from a breakdown and spin up an agent team to implement it'
+description: 'Implement the next task group (or all groups) from a task breakdown using focused agents'
 ---
 
-# Work Next Task
+# Work
 
-Pick a task grouping from a task breakdown and spin up an agent team to implement it, guided by the specs.
+Orchestrate implementation of a task breakdown by coordinating the Git Expert, Implementer, and Quality agents. Uses Claude Code's native task tools to track group progress so state survives across context resets.
 
-> **This command stops after agents complete.** It does NOT run quality gates or merge branches.
+**Input:** `$ARGUMENTS` — task list name, optionally followed by `--all`
 
-**Input:** `$ARGUMENTS` — optional task list name (maps to `.claude/tasks/$ARGUMENTS.md`). If omitted, the user picks from available task lists.
+- `work <task-name>` — implement the next available group only
+- `work <task-name> --all` — enqueue and implement every incomplete group in dependency order
+
+---
 
 ## Steps
 
-### 1. Resolve the task list
+### 1. Parse arguments
 
-- If `$ARGUMENTS` is provided, read `.claude/tasks/$ARGUMENTS.md`. If it doesn't exist, tell the user and stop.
-- If `$ARGUMENTS` is **not** provided:
-  1. Glob for all files matching `.claude/tasks/*.md`.
-  2. For each file, read the first heading line (`# Task Breakdown: ...`) and check whether any tasks remain incomplete (lines matching `- [ ]`). Exclude files where every task is `- [x]`.
-  3. If no task lists have incomplete tasks, tell the user "All task lists are complete" and stop.
-  4. Present the list to the user with `AskUserQuestion` — show each task list name, its heading, and a count of remaining tasks (e.g. "my-feature — 4 tasks remaining"). Let the user pick one.
+Split `$ARGUMENTS` on whitespace. Extract:
+- `taskListName` — first token (e.g. `issue-3`)
+- `allFlag` — true if `--all` is present
 
-### 2. Parse task groupings
+Read `.claude/tasks/<taskListName>.md`. If it doesn't exist, tell the user and stop.
 
-Read the selected task list file and parse its structure:
+### 2. Parse the task list
 
-- Groups are headed by `## Group N — <label>` lines.
-- Tasks within a group match the pattern `- [ ] **Task title**` (incomplete) or `- [x] **Task title**` (complete).
-- A group is **fully complete** if all its tasks are `- [x]`.
-- A group is **available** if it is not fully complete and all groups it depends on (listed in the `_Depends on: ..._` line) are fully complete.
-- A group is **blocked** if it depends on a group that still has incomplete tasks.
+Parse the file structure:
 
-### 3. Let the user choose a task grouping
+- Groups are headed by `## Group N — <label>` lines
+- Tasks match `- [ ] **Task title**` (incomplete) or `- [x] **Task title**` (complete)
+- A group is **complete** if all its tasks are `- [x]`
+- A group is **available** if not complete AND all groups in its `_Depends on: ..._` line are complete
+- A group is **blocked** if any dependency group has incomplete tasks
 
-Use `AskUserQuestion` to present the available (non-blocked, non-complete) groups. For each group show:
+If all groups are already complete, tell the user and stop.
 
-- Group number and label
-- Count of incomplete tasks in the group
-- Task titles at a glance
+### 3. Verify specs exist
 
-If only one group is available, skip the question and auto-select it.
+Before doing anything, check that `.claude/specs/<taskListName>/` contains a spec file for every incomplete task across all groups you intend to process. For each incomplete task, look for `.claude/specs/<taskListName>/<task-title-kebab>.md`.
 
-If no groups are available (all remaining groups are blocked), tell the user which groups are blocking and stop.
+If any specs are missing, list them and suggest running `/spec <taskListName>` first. Stop.
 
-### 4. Verify specs exist
+### 4. Enqueue groups via TaskCreate
 
-Check that `.claude/specs/$ARGUMENTS/` exists and contains spec files. For each incomplete task in the selected group, look for a matching spec file at `.claude/specs/<task-list-name>/<task-title-kebab>.md`.
+**If `--all` flag:**
+For each incomplete group in dependency order, call `TaskCreate` with:
+- `title`: `<taskListName> — Group <N>: <label>`
+- `description`: comma-separated list of incomplete task titles in the group
 
-- If specs are missing for any task, tell the user which specs are missing and suggest running `/spec <task-list-name>` first. Stop.
-
-### 5. Create a feature branch
-
-Derive the **task group name** as `<task-list-name>-group-<N>` (kebab-case). Create and switch to a branch for this work:
-
+Print the queue:
 ```
-git checkout -b feat/<task-group-name>
-```
-
-If the branch already exists, switch to it instead.
-
-Record the feature branch name — it will be needed by `/work-merge`.
-
-### 6. Plan the agent team
-
-Switch to **plan mode** (`EnterPlanMode`). In the plan:
-
-1. Read each spec file for the tasks in the selected group from `.claude/specs/<task-list-name>/`.
-2. Identify dependencies between tasks — tasks within the group are parallel by design, but note any ordering preferences from `Blocked by` / `Blocking` fields in the specs.
-3. Search for relevant community skills by running `npx skills find <topic>` for key technologies or patterns across the group's tasks. If useful skills are found, run `npx skills add <owner/repo@skill>` to install them before spawning agents.
-4. For each task, define an agent assignment:
-   - **Agent name** — derived from the task title (kebab-case)
-   - **Worktree branch** — `work/<task-group-name>-<agent-number>` (e.g. `work/issue-10-group-1-1`)
-   - **Prompt** — include the full spec content, the list of files to create/modify, and explicit instructions to implement the spec (not just plan). Include instructions to search for and install skills when encountering unfamiliar libraries or patterns.
-5. Present the plan to the user for approval via `ExitPlanMode`.
-
-### 7. Spawn implementation agents
-
-After plan approval, spawn one subagent per task using the `Agent` tool. All agents run in parallel.
-
-**Every agent MUST use `isolation: "worktree"`.** Do NOT create or modify files directly on the feature branch. Parallel agents write to the same working directory without isolation and can silently overwrite each other's work. There are no exceptions to this rule.
-
-Each agent's worktree branch MUST be named `work/<task-group-name>-<agent-number>` (e.g. `work/issue-10-group-1-1`, `work/issue-10-group-1-2`), where `<agent-number>` is a sequential integer starting at 1.
-
-For each task, call the `Agent` tool with:
-
-- `subagent_type`: `"implementer"` (or `"general-purpose"` if implementer is unavailable)
-- `isolation`: `"worktree"`
-- `run_in_background`: `true`
-- `mode`: `"auto"`
-- `prompt`: Include the full spec content, the list of files to create/modify, and explicit instructions to implement the spec. Instruct the agent to **commit all changes** to its `work/` worktree branch before completing. Include the Skills CLI instructions below.
-
-Each agent:
-
-1. Reads its assigned spec file
-2. If the task involves an unfamiliar library or pattern, searches for a skill first: `npx skills find <topic>`, then `npx skills add <owner/repo@skill>` if a match is found
-3. Implements the changes described in the spec
-4. Runs any verification steps listed in the spec (tests, lint, type checks)
-5. **Commits all changes** to its `work/<task-group-name>-<agent-number>` branch
-6. Reports completion status clearly
-
-As agents complete, monitor for failures. If an agent fails, report which agent failed and why.
-
-### 8. Write the session state file
-
-After all agents finish (success or failure), write a session state file at:
-
-```
-.claude/work-sessions/<task-group-name>.json
+Work All: <taskListName>
+──────────────────────────
+[queued] Group 1 — <label>  (<N> tasks)
+[queued] Group 2 — <label>  (<N> tasks)
+...
+[complete] Group N — <label>  (skipped)
+──────────────────────────
 ```
 
-This file is the **only input** `/work-merge` accepts. If the schema is wrong, `/work-merge` will fail or behave unpredictably.
+**If single group:**
+Find the next available group. If multiple are available, use `AskUserQuestion` to let the user pick. Auto-select if only one is available. Call `TaskCreate` for that group only.
 
-#### Required schema — copy this structure exactly
+### 5. Process the queue
 
-The example below shows a completed run for task list `issue-2`, group 3, with two agents. Use it as a direct template — substitute real values for the placeholders, keep every key name identical.
+Call `TaskList` to get pending tasks. For each pending task in order, run the pipeline below. After each group completes successfully, call `TaskUpdate` to mark it done before moving to the next.
 
-```json
-{
-  "taskListName": "issue-2",
-  "taskGroupName": "issue-2-group-3",
-  "featureBranch": "feat/issue-2-group-3",
-  "groupNumber": 3,
-  "agents": [
-    {
-      "agentNumber": 1,
-      "taskTitle": "Add database migrations",
-      "worktreeBranch": "work/issue-2-group-3-1",
-      "status": "success",
-      "specFile": ".claude/specs/issue-2/add-database-migrations.md"
-    },
-    {
-      "agentNumber": 2,
-      "taskTitle": "Write unit tests",
-      "worktreeBranch": "work/issue-2-group-3-2",
-      "status": "failed",
-      "specFile": ".claude/specs/issue-2/write-unit-tests.md"
-    }
-  ]
-}
-```
-
-#### Field rules
-
-| Field | Type | Rule |
-|---|---|---|
-| `taskListName` | string | The task list file name without `.md` (e.g. `issue-2`) |
-| `taskGroupName` | string | `<taskListName>-group-<N>` (e.g. `issue-2-group-3`) |
-| `featureBranch` | string | Always `feat/<taskGroupName>` |
-| `groupNumber` | number | The integer group number, not a string |
-| `agents[].agentNumber` | number | Sequential integer starting at 1 |
-| `agents[].taskTitle` | string | Exact task title as it appears in the task list (spaces, not kebab) |
-| `agents[].worktreeBranch` | string | Must start with `work/` — never `feat/` |
-| `agents[].status` | string | Exactly `"success"` or `"failed"` — no other values |
-| `agents[].specFile` | string | Full relative path to the spec file |
-
-#### Common mistakes — do not do these
-
-- ❌ Using `"group"` instead of `"taskGroupName"`
-- ❌ Using `"branch"` instead of `"featureBranch"`
-- ❌ Using `"name"` instead of `"taskTitle"`
-- ❌ Setting `worktreeBranch` to a `feat/` branch — it must be a `work/` branch
-- ❌ Using `"complete"` or `"done"` as a status — only `"success"` or `"failed"` are valid
-- ❌ Adding extra fields like `"verification"`, `"tasks"`, or `"status"` at the top level
-
-#### Self-validation — check before saving
-
-Before writing the file, verify each item in this checklist:
-
-- [ ] Top-level keys are exactly: `taskListName`, `taskGroupName`, `featureBranch`, `groupNumber`, `agents`
-- [ ] `taskGroupName` matches the pattern `<taskListName>-group-<N>`
-- [ ] `featureBranch` starts with `feat/`
-- [ ] `groupNumber` is a number (not a string)
-- [ ] Every agent entry has exactly these keys: `agentNumber`, `taskTitle`, `worktreeBranch`, `status`, `specFile`
-- [ ] Every `worktreeBranch` starts with `work/`
-- [ ] Every `status` is either `"success"` or `"failed"`
-- [ ] No extra keys exist anywhere in the document
-
-If any item is not checked, fix the JSON before writing it.
-
-### 9. Summary
-
-Print a summary:
-
-- Task list and group that was worked
-- Feature branch created: `feat/<task-group-name>`
-- Each agent's worktree branch and status
-- Path to the session state file written
-- **Next step:** `Run /work-merge <task-group-name> to run quality gates and merge into the feature branch.`
-
-Do not mark tasks complete in the task list. Do not run quality gates. Do not merge anything.
-That is the job of `/work-merge`.
+If `--all` is not set, stop after the first group.
 
 ---
 
-## Skills CLI
+## Pipeline (per group)
 
-When a task involves a library, framework, or pattern you're not confident about, use the skills CLI to find and install community skills that provide expert guidance.
+Run these phases in sequence for each group.
 
-```bash
-# Search for skills by topic
-npx skills find <topic>
+### Phase 1 — Setup
 
-# Install a skill from the results
-npx skills add <owner/repo@skill>
+Derive names:
+- `taskGroupName` = `<taskListName>-group-<N>` (kebab-case)
+- `featureBranch` = `feat/<taskGroupName>`
+- For each incomplete task in the group, assign:
+  - `agentNumber` — sequential integer starting at 1
+  - `worktreeBranch` = `work/<taskGroupName>-<agentNumber>`
+
+Invoke the **Git Expert** agent with `Operation: SETUP`:
+
+```
+Agent({
+  agent: "git-expert",
+  prompt: `
+    Operation: SETUP
+    taskGroupName: <taskGroupName>
+    featureBranch: <featureBranch>
+    tasks:
+      - agentNumber: 1
+        taskTitle: <task title>
+        worktreeBranch: work/<taskGroupName>-1
+      - agentNumber: 2
+        taskTitle: <task title>
+        worktreeBranch: work/<taskGroupName>-2
+  `
+})
 ```
 
-Include these instructions in every agent prompt so agents can discover and install skills during implementation.
+Wait for `GIT_SETUP_COMPLETE`. If setup fails, mark the group's task entry failed and stop.
+
+### Phase 2 — Implement
+
+Spawn one **Implementer** agent per incomplete task in the group. Tasks within a group are parallel — spawn all at once with `run_in_background: true`.
+
+For each task:
+
+```
+Agent({
+  agent: "implementer",
+  isolation: "worktree",
+  worktreeBranch: "<worktreeBranch>",
+  run_in_background: true,
+  prompt: `
+    Task: <task title>
+    Branch: <worktreeBranch>
+
+    <full contents of .claude/specs/<taskListName>/<task-title-kebab>.md>
+
+    Implement this spec exactly. Commit all changes to your branch when done.
+  `
+})
+```
+
+Wait for all Implementers to complete. Collect `IMPLEMENTATION_COMPLETE` blocks.
+
+If any Implementer reports `status: failed`, warn the user and ask via `AskUserQuestion`:
+- `"Continue with passing tasks"` — proceed to Phase 3, skipping failed branches
+- `"Stop"` — mark the group failed, stop
+
+### Phase 3 — Quality gates
+
+For each branch where Implementer reported `status: success`, spawn a **Quality** agent. Run them sequentially — one at a time, not in parallel.
+
+```
+Agent({
+  agent: "quality",
+  isolation: "worktree",
+  worktreeBranch: "<worktreeBranch>",
+  run_in_background: false,
+  prompt: `
+    branch: <worktreeBranch>
+    taskTitle: <task title>
+    specFile: .claude/specs/<taskListName>/<task-title-kebab>.md
+  `
+})
+```
+
+Parse the `QA_REPORT_START ... QA_REPORT_END` block from each Quality agent's output.
+
+After each QA report, show the user:
+
+```
+QA Results — <worktreeBranch> (<task title>)
+
+  Simplify        [PASS|FAIL]
+  Review          [PASS|FAIL]
+  Security Review [PASS|FAIL]
+  Security Scan   [PASS|FAIL]
+
+  Overall: [PASS|FAIL]
+  Notes: <notes>
+```
+
+Then ask for confirmation via `AskUserQuestion`:
+
+If overall **PASS**:
+- `"Merge this branch"` ✅
+- `"Skip this branch"` ⏭
+- `"Stop here"` 🛑
+
+If overall **FAIL**:
+- `"Skip this branch"` ⏭
+- `"Merge anyway (I accept the risk)"` ⚠️
+- `"Stop here"` 🛑
+
+If the user selects **"Stop here"**: call `TaskUpdate` to mark the group stopped and halt entirely. Do not process remaining branches or groups.
+
+Collect the list of branches the user approved for merging.
+
+### Phase 4 — Merge
+
+Invoke the **Git Expert** agent with `Operation: MERGE`:
+
+```
+Agent({
+  agent: "git-expert",
+  run_in_background: false,
+  prompt: `
+    Operation: MERGE
+    featureBranch: <featureBranch>
+    taskListFile: .claude/tasks/<taskListName>.md
+    branches:
+      - <worktreeBranch-1>
+      - <worktreeBranch-2>
+    completedTasks:
+      - <task title 1>
+      - <task title 2>
+  `
+})
+```
+
+Wait for `GIT_MERGE_COMPLETE`. Report any conflicts that were resolved.
+
+### Phase 5 — Verify
+
+Invoke the **Git Expert** agent with `Operation: VERIFY`:
+
+```
+Agent({
+  agent: "git-expert",
+  run_in_background: false,
+  prompt: `
+    Operation: VERIFY
+    featureBranch: <featureBranch>
+    verificationCommands:
+      - npm run build
+      - npm run lint
+      - npm run typecheck
+      - npm test
+  `
+})
+```
+
+Wait for `GIT_VERIFY_COMPLETE`. If verification fails, report which checks failed and do not mark the group complete — tell the user to resolve issues and re-run.
+
+### Phase 6 — Complete
+
+Call `TaskUpdate` to mark the group's task entry as complete.
+
+Print progress:
+
+```
+──────────────────────────
+✓ Group <N> — <label> complete. Feature branch: feat/<taskGroupName>
+  Tasks merged: <N>  |  Skipped: <N>
+  Next: Group <M> — <label>   (or "All groups complete")
+──────────────────────────
+```
+
+---
+
+## Final summary (after all groups processed)
+
+```
+══════════════════════════════════
+  Work Complete: <taskListName>
+══════════════════════════════════
+
+Groups completed this session:
+  ✓ Group 1 — <label>  →  feat/<taskGroupName>
+  ✓ Group 2 — <label>  →  feat/<taskGroupName>
+
+Previously complete (skipped):
+  ✓ Group N — <label>
+
+Still incomplete (if any):
+  ✗ Group M — <label>  (<reason>)
+
+Next steps:
+  Review feature branches and run /squash-pr when ready.
+══════════════════════════════════
+```
+
+---
+
+## Error handling
+
+- **Implementer failure**: warn user, offer continue-with-passing or stop
+- **QA report missing**: treat branch as FAIL, show raw output to user
+- **Git conflict**: Git Expert resolves best-effort and documents it; user sees conflict summary before Phase 4 completes
+- **Verification failure**: do not mark group complete; tell user what failed
+- **Blocked groups** (in `--all` mode): if a group's dependencies are unmet after prior groups complete, report blockage and stop
+
+## Rules
+
+- Do NOT implement anything directly — always delegate to the Implementer agent
+- Do NOT merge anything directly — always delegate to the Git Expert agent
+- Do NOT mark tasks complete in the task list directly — Git Expert owns that
+- Do NOT skip the Quality phase — every Implementer branch must pass through Quality before merging
+- Do NOT process groups in parallel — dependency order must be respected
+- DO spawn all Implementers in a group in parallel — that is the point of grouping

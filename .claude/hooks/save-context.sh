@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # PreCompact hook — saves context snapshot before compaction
 
-mkdir -p .claude/context-snapshots
+mkdir -p "$CLAUDE_PROJECT_DIR/.claude/context-snapshots"
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 
@@ -16,4 +16,4 @@ TIMESTAMP=$(date +%Y%m%d-%H%M%S)
   echo ""
   echo "## Recent Activity"
   git log --oneline -10
-} > ".claude/context-snapshots/snapshot-$TIMESTAMP.md"
+} > "$CLAUDE_PROJECT_DIR/.claude/context-snapshots/snapshot-$TIMESTAMP.md"
