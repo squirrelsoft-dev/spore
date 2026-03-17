@@ -4,3 +4,10 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+rig-core = { version = "0.32", features = ["rmcp"] }
+rmcp = { version = "0.16", features = ["client", "transport-async-rw"] }
+tool-registry = { path = "../tool-registry" }
+agent-sdk = { path = "../agent-sdk" }
+skill-loader = { path = "../skill-loader" }
+tokio = { version = "1", features = ["full"] }
+futures = "0.3"
