@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use agent_runtime::config::RuntimeConfig;
+use agent_runtime::http;
 use agent_runtime::provider;
 use agent_runtime::runtime_agent::RuntimeAgent;
 use agent_sdk::MicroAgent;
@@ -29,7 +30,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .init();
 
     // Step 1: Load configuration from environment
-    tracing::info!("[1/6] Loading configuration");
+    tracing::info!("[1/7] Loading configuration");
     let config = RuntimeConfig::from_env()?;
     tracing::info!(
         skill_name = %config.skill_name,
@@ -39,16 +40,16 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     );
 
     // Step 2: Create and populate the tool registry
-    tracing::info!("[2/6] Registering tool entries");
+    tracing::info!("[2/7] Registering tool entries");
     let registry = Arc::new(ToolRegistry::new());
     register_tool_endpoints(&registry)?;
 
     // Step 3: Connect all tool servers
-    tracing::info!("[3/6] Connecting to tool servers");
+    tracing::info!("[3/7] Connecting to tool servers");
     registry.connect_all().await?;
 
     // Step 4: Load skill manifest
-    tracing::info!("[4/6] Loading skill manifest");
+    tracing::info!("[4/7] Loading skill manifest");
     let tool_checker = RegistryToolChecker(registry.clone());
     let loader = SkillLoader::new(
         config.skill_dir,
@@ -58,15 +59,17 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     let manifest = loader.load(&config.skill_name).await?;
 
     // Step 5: Build provider-backed agent
-    tracing::info!("[5/6] Building agent");
+    tracing::info!("[5/7] Building agent");
     let agent = provider::build_agent(&manifest, &registry).await?;
 
     // Step 6: Wrap as MicroAgent
-    tracing::info!("[6/6] Creating runtime agent");
+    tracing::info!("[6/7] Creating runtime agent");
     let runtime_agent = RuntimeAgent::new(manifest, agent, registry.clone());
-    let _micro_agent: Arc<dyn MicroAgent> = Arc::new(runtime_agent);
+    let micro_agent: Arc<dyn MicroAgent> = Arc::new(runtime_agent);
 
-    tracing::info!("Agent startup complete");
+    // Step 7: Start HTTP server
+    tracing::info!(bind_addr = %config.bind_addr, "[7/7] Starting HTTP server");
+    http::start_server(micro_agent, config.bind_addr).await?;
     Ok(())
 }
 
