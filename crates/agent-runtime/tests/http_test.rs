@@ -179,7 +179,10 @@ async fn invoke_invalid_json_returns_422() {
         .await
         .unwrap();
 
-    assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+    let status = response.status();
+    let body_str = read_body(response).await;
+    assert_eq!(status, StatusCode::UNPROCESSABLE_ENTITY);
+    assert!(body_str.contains("Failed to deserialize the JSON body"));
 }
 
 #[tokio::test]

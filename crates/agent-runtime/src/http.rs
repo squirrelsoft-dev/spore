@@ -118,58 +118,51 @@ mod tests {
 
     #[tokio::test]
     async fn tool_call_failed_returns_502() {
-        let err = AppError(AgentError::ToolCallFailed {
+        let expected = AgentError::ToolCallFailed {
             tool: "search".into(),
             reason: "timeout".into(),
-        });
-        let response = err.into_response();
+        };
+        let response = AppError(expected.clone()).into_response();
         assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
 
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        assert!(json.get("ToolCallFailed").is_some());
-        let inner = &json["ToolCallFailed"];
-        assert_eq!(inner["tool"], "search");
-        assert_eq!(inner["reason"], "timeout");
+        let parsed: AgentError = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed, expected);
     }
 
     #[tokio::test]
     async fn confidence_too_low_returns_200() {
-        let err = AppError(AgentError::ConfidenceTooLow {
+        let expected = AgentError::ConfidenceTooLow {
             confidence: 0.3,
             threshold: 0.8,
-        });
-        let response = err.into_response();
+        };
+        let response = AppError(expected.clone()).into_response();
         assert_eq!(response.status(), StatusCode::OK);
 
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let inner = &json["ConfidenceTooLow"];
-        assert!(inner.get("confidence").is_some());
-        assert!(inner.get("threshold").is_some());
+        let parsed: AgentError = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed, expected);
     }
 
     #[tokio::test]
     async fn max_turns_exceeded_returns_422() {
-        let err = AppError(AgentError::MaxTurnsExceeded { turns: 10 });
-        let response = err.into_response();
+        let expected = AgentError::MaxTurnsExceeded { turns: 10 };
+        let response = AppError(expected.clone()).into_response();
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
 
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let inner = &json["MaxTurnsExceeded"];
-        assert_eq!(inner["turns"], 10);
+        let parsed: AgentError = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed, expected);
     }
 
     #[tokio::test]
     async fn internal_returns_500() {
-        let err = AppError(AgentError::Internal("something broke".into()));
-        let response = err.into_response();
+        let expected = AgentError::Internal("something broke".into());
+        let response = AppError(expected.clone()).into_response();
         assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
 
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
-        let json: serde_json::Value = serde_json::from_slice(&body).unwrap();
-        let inner = &json["Internal"];
-        assert_eq!(inner.as_str().unwrap(), "something broke");
+        let parsed: AgentError = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed, expected);
     }
 }
