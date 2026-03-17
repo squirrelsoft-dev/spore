@@ -10,6 +10,7 @@ serde_json = "1"
 agent-sdk = { path = "../agent-sdk" }
 rmcp = { version = "0.16", features = ["client", "transport-async-rw"] }
 tokio = { version = "1", features = ["net"] }
+futures = "0.3"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "net"] }

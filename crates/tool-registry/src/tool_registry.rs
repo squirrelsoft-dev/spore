@@ -94,8 +94,13 @@ impl ToolRegistry {
             entries.keys().cloned().collect()
         };
 
-        for name in &names {
-            self.connect(name).await?;
+        let results = futures::future::join_all(
+            names.iter().map(|name| self.connect(name)),
+        )
+        .await;
+
+        for result in results {
+            result?;
         }
         Ok(())
     }

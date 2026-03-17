@@ -10,3 +10,4 @@ tool-registry = { path = "../tool-registry" }
 agent-sdk = { path = "../agent-sdk" }
 skill-loader = { path = "../skill-loader" }
 tokio = { version = "1", features = ["full"] }
+futures = "0.3"

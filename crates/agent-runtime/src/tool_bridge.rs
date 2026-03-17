@@ -15,28 +15,32 @@ pub async fn resolve_mcp_tools(
     manifest: &SkillManifest,
 ) -> Result<Vec<McpTool>, RegistryError> {
     let entries = registry.resolve_for_skill(manifest)?;
-    let mut mcp_tools = Vec::new();
 
-    for entry in &entries {
-        let handle = match &entry.handle {
-            Some(h) => h,
-            None => continue,
-        };
+    let futures = entries.iter().filter_map(|entry| {
+        entry.handle.as_ref().map(|handle| async move {
+            let tools_result = handle.peer().list_tools(None).await.map_err(|e| {
+                RegistryError::ConnectionFailed {
+                    endpoint: entry.endpoint.clone(),
+                    reason: e.to_string(),
+                }
+            })?;
 
-        let tools_result = handle.peer().list_tools(None).await.map_err(|e| {
-            RegistryError::ConnectionFailed {
-                endpoint: entry.endpoint.clone(),
-                reason: e.to_string(),
-            }
-        })?;
+            let server_sink = handle.peer().clone();
+            Ok(tools_result
+                .tools
+                .into_iter()
+                .map(|tool_def| McpTool::from_mcp_server(tool_def, server_sink.clone()))
+                .collect::<Vec<_>>())
+        })
+    });
 
-        let server_sink = handle.peer().clone();
-        for tool_def in tools_result.tools {
-            mcp_tools.push(McpTool::from_mcp_server(tool_def, server_sink.clone()));
-        }
-    }
+    let results: Vec<Result<Vec<McpTool>, RegistryError>> =
+        futures::future::join_all(futures).await;
 
-    Ok(mcp_tools)
+    results
+        .into_iter()
+        .collect::<Result<Vec<_>, _>>()
+        .map(|v| v.into_iter().flatten().collect())
 }
 
 /// Attaches resolved MCP tools to a rig-core `AgentBuilder` and produces an `Agent`.

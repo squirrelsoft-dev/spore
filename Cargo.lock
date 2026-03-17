@@ -7,6 +7,7 @@ name = "agent-runtime"
 version = "0.1.0"
 dependencies = [
  "agent-sdk",
+ "futures",
  "rig-core",
  "rmcp",
  "skill-loader",
@@ -1931,6 +1932,7 @@ name = "tool-registry"
 version = "0.1.0"
 dependencies = [
  "agent-sdk",
+ "futures",
  "rmcp",
  "schemars 0.8.22",
  "serde",
