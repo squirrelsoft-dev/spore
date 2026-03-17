@@ -1,60 +1,103 @@
-mod tool_bridge;
-
-use std::path::PathBuf;
 use std::sync::Arc;
 
-use rig::client::CompletionClient;
-use rig::providers::openai;
+use agent_runtime::config::RuntimeConfig;
+use agent_runtime::provider;
+use agent_runtime::runtime_agent::RuntimeAgent;
+use agent_sdk::MicroAgent;
 use skill_loader::SkillLoader;
-use tool_registry::{ToolEntry, ToolRegistry};
+use tool_registry::{ToolEntry, ToolExists, ToolRegistry};
+use tracing_subscriber::EnvFilter;
+
+/// A wrapper that delegates `ToolExists` checks to a shared `ToolRegistry`.
+struct RegistryToolChecker(Arc<ToolRegistry>);
+
+impl ToolExists for RegistryToolChecker {
+    fn tool_exists(&self, name: &str) -> bool {
+        self.0.tool_exists(name)
+    }
+}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {
-    // Step 1: Create the tool registry
-    println!("[1/6] Creating tool registry");
-    let registry = Arc::new(ToolRegistry::new());
+    tracing_subscriber::fmt()
+        .with_env_filter(
+            EnvFilter::from_default_env()
+                .add_directive(tracing::Level::INFO.into()),
+        )
+        .with_writer(std::io::stderr)
+        .with_ansi(false)
+        .init();
 
-    // Step 2: Register hardcoded tool entries
-    println!("[2/6] Registering tool entries");
-    register_default_tools(&registry)?;
+    // Step 1: Load configuration from environment
+    tracing::info!("[1/6] Loading configuration");
+    let config = RuntimeConfig::from_env()?;
+    tracing::info!(
+        skill_name = %config.skill_name,
+        skill_dir = %config.skill_dir.display(),
+        bind_addr = %config.bind_addr,
+        "Configuration loaded"
+    );
+
+    // Step 2: Create and populate the tool registry
+    tracing::info!("[2/6] Registering tool entries");
+    let registry = Arc::new(ToolRegistry::new());
+    register_tool_endpoints(&registry)?;
 
     // Step 3: Connect all tool servers
-    println!("[3/6] Connecting to tool servers");
+    tracing::info!("[3/6] Connecting to tool servers");
     registry.connect_all().await?;
 
     // Step 4: Load skill manifest
-    println!("[4/6] Loading skill manifest");
-    let tool_checker = skill_loader::AllToolsExist;
+    tracing::info!("[4/6] Loading skill manifest");
+    let tool_checker = RegistryToolChecker(registry.clone());
     let loader = SkillLoader::new(
-        PathBuf::from("./skills"),
+        config.skill_dir,
         registry.clone(),
         Box::new(tool_checker),
     );
-    let manifest = loader.load("echo").await?;
+    let manifest = loader.load(&config.skill_name).await?;
 
-    // Step 5: Resolve MCP tools for the skill
-    println!("[5/6] Resolving MCP tools");
-    let tools = tool_bridge::resolve_mcp_tools(&registry, &manifest).await?;
+    // Step 5: Build provider-backed agent
+    tracing::info!("[5/6] Building agent");
+    let agent = provider::build_agent(&manifest, &registry).await?;
 
-    // Step 6: Build rig-core agent with tools
-    println!("[6/6] Building agent");
-    let openai_client = openai::Client::new("placeholder-key")?;
-    let builder = openai_client.agent("gpt-4o").preamble(&manifest.preamble);
-    let _agent = tool_bridge::build_agent_with_tools(builder, tools);
+    // Step 6: Wrap as MicroAgent
+    tracing::info!("[6/6] Creating runtime agent");
+    let runtime_agent = RuntimeAgent::new(manifest, agent, registry.clone());
+    let _micro_agent: Arc<dyn MicroAgent> = Arc::new(runtime_agent);
 
-    println!("Agent startup complete");
+    tracing::info!("Agent startup complete");
     Ok(())
 }
 
-/// Register the default set of tool entries into the registry.
-fn register_default_tools(registry: &ToolRegistry) -> Result<(), Box<dyn std::error::Error>> {
-    let entry = ToolEntry {
-        name: "echo-tool".to_string(),
-        version: "0.1.0".to_string(),
-        endpoint: "mcp://localhost:7001".to_string(),
-        handle: None,
-    };
-    registry.register(entry)?;
+/// Parse the `TOOL_ENDPOINTS` environment variable and register each entry.
+///
+/// Expects a comma-separated list of `name=endpoint` pairs, e.g.
+/// `echo-tool=mcp://localhost:7001,other=mcp://localhost:7002`.
+/// Falls back to `echo-tool=mcp://localhost:7001` when the variable is unset.
+fn register_tool_endpoints(
+    registry: &ToolRegistry,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let endpoints = std::env::var("TOOL_ENDPOINTS")
+        .unwrap_or_else(|_| "echo-tool=mcp://localhost:7001".to_string());
+
+    for pair in endpoints.split(',') {
+        let pair = pair.trim();
+        if pair.is_empty() {
+            continue;
+        }
+        let (name, endpoint) = pair.split_once('=').ok_or_else(|| {
+            format!("Invalid TOOL_ENDPOINTS entry: '{pair}' (expected name=endpoint)")
+        })?;
+        let entry = ToolEntry {
+            name: name.trim().to_string(),
+            version: "0.1.0".to_string(),
+            endpoint: endpoint.trim().to_string(),
+            handle: None,
+        };
+        tracing::info!(name = %entry.name, endpoint = %entry.endpoint, "Registering tool");
+        registry.register(entry)?;
+    }
+
     Ok(())
 }
-
