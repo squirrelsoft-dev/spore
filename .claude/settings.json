@@ -6,7 +6,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/guard.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/guard.sh\""
           }
         ]
       }
@@ -17,7 +17,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/format.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/format.sh\""
           }
         ]
       }
@@ -28,11 +28,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/stop-quality-gate.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/stop-quality-gate.sh\""
           },
           {
             "type": "command",
-            "command": "bash .claude/hooks/task-summary.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/task-summary.sh\""
           }
         ]
       }
@@ -42,7 +42,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "bash .claude/hooks/save-context.sh"
+            "command": "bash \"$CLAUDE_PROJECT_DIR/.claude/hooks/save-context.sh\""
           }
         ]
       }
@@ -60,7 +60,7 @@
   },
   "statusLine": {
     "type": "command",
-    "command": "sh .claude/statusline-command.sh"
+    "command": "sh \"$CLAUDE_PROJECT_DIR/.claude/statusline-command.sh\""
   },
   "permissions": {
     "allow": [

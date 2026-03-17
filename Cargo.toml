@@ -6,4 +6,5 @@ members = [
     "crates/tool-registry",
     "crates/agent-runtime",
     "crates/orchestrator",
+    "tools/echo-tool",
 ]

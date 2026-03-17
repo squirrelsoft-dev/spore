@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Stop hook — generates audit trail of what was done in this session
 
-mkdir -p .claude/logs
+mkdir -p "$CLAUDE_PROJECT_DIR/.claude/logs"
 
 TIMESTAMP=$(date +%Y%m%d-%H%M%S)
 BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
@@ -15,4 +15,4 @@ BRANCH=$(git branch --show-current 2>/dev/null || echo "unknown")
   echo ""
   echo "## Recent Commits"
   git log --oneline -5 2>/dev/null
-} > ".claude/logs/task-$TIMESTAMP.md" 2>/dev/null
+} > "$CLAUDE_PROJECT_DIR/.claude/logs/task-$TIMESTAMP.md" 2>/dev/null

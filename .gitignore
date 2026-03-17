@@ -27,3 +27,4 @@ CLAUDE.local.md
 .claude/context-snapshots/
 .claude/work-sessions/
 .claude/worktrees/
+.worktrees/
