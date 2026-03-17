@@ -6,12 +6,12 @@
 
 _Tasks in this group can be done in parallel._
 
-- [ ] **Add axum dependency to agent-runtime** `[S]`
+- [x] **Add axum dependency to agent-runtime** `[S]`
       Add `axum = "0.8"` to `crates/agent-runtime/Cargo.toml` under `[dependencies]`. The `tokio` dependency already has `features = ["full"]` which includes `net` and `rt-multi-thread`, so TCP listener support is available. `hyper` and `tower` are already in the dependency tree via `rig-core`, so axum will share them. No other new dependencies are needed — `serde_json` is already present.
       Files: `crates/agent-runtime/Cargo.toml`
       Blocking: "Create HTTP handler module", "Wire router into main.rs"
 
-- [ ] **Create AppError wrapper with HTTP status mapping** `[S]`
+- [x] **Create AppError wrapper with HTTP status mapping** `[S]`
       Create an `AppError` newtype wrapping `AgentError` in `crates/agent-runtime/src/http.rs` (or a dedicated `error.rs` if preferred). Implement `axum::response::IntoResponse` for `AppError` to map each `AgentError` variant to an HTTP status code: `ToolCallFailed` to 502 Bad Gateway, `ConfidenceTooLow` to 200 OK (successful but escalated — return a valid response body with the confidence info), `MaxTurnsExceeded` to 422 Unprocessable Entity, `Internal` to 500 Internal Server Error. The response body should be JSON-serialized `AgentError` (it already derives `Serialize`). Implement `From<AgentError> for AppError` so handlers can use `?` directly. Follow the project's manual error impl pattern (no `thiserror`) as seen in `crates/agent-sdk/src/agent_error.rs` and `crates/agent-runtime/src/provider.rs`.
       Files: `crates/agent-runtime/src/http.rs`
       Blocking: "Create HTTP handler module"
@@ -20,7 +20,7 @@ _Tasks in this group can be done in parallel._
 
 _Depends on: Group 1._
 
-- [ ] **Create HTTP handler module** `[M]`
+- [x] **Create HTTP handler module** `[M]`
       Create `crates/agent-runtime/src/http.rs` with:
       1. An `AppState` type alias or struct wrapping `Arc<dyn MicroAgent>` (the trait already has `Send + Sync` bounds on line 14 of `micro_agent.rs`, and `Arc<dyn MicroAgent>` is `Clone`, satisfying axum's `State` extractor requirements).
       2. `invoke_handler` — async function accepting `State(state)` and `Json(request): Json<AgentRequest>`, calling `state.invoke(request).await`, returning `Result<Json<AgentResponse>, AppError>`. On success return 200 with JSON body. On error, `AppError`'s `IntoResponse` handles status mapping.
@@ -36,7 +36,7 @@ _Depends on: Group 1._
 
 _Depends on: Group 2._
 
-- [ ] **Wire router into main.rs** `[S]`
+- [x] **Wire router into main.rs** `[S]`
       Modify `crates/agent-runtime/src/main.rs` to start the HTTP server after agent construction. Currently line 67 creates `_micro_agent: Arc<dyn MicroAgent>` (unused). Change this to: (1) remove the underscore prefix (use `micro_agent`), (2) wrap it as the `AppState` type, (3) read `config.bind_addr` (already parsed from `BIND_ADDR` env var with default `0.0.0.0:8080` in `config.rs`), (4) call `http::start_server(state, config.bind_addr).await?`. Update the step comments from "[6/6]" to "[6/7]" and add "[7/7] Starting HTTP server". Log the bind address before starting. The function signature already returns `Result<(), Box<dyn std::error::Error>>`, so `std::io::Error` from the listener will propagate.
       Files: `crates/agent-runtime/src/main.rs`
       Blocked by: "Create HTTP handler module"
@@ -46,7 +46,7 @@ _Depends on: Group 2._
 
 _Depends on: Group 3._
 
-- [ ] **Write handler integration tests** `[M]`
+- [x] **Write handler integration tests** `[M]`
       Create `crates/agent-runtime/tests/http_test.rs` with tests that exercise the HTTP layer without a real TCP listener. Use `tower::ServiceExt` (already in the dep tree) to call the router directly via `oneshot()`. Create a `MockAgent` implementing `MicroAgent` (follow the pattern from `crates/agent-sdk/tests/micro_agent_test.rs` lines 9-70, which has `MockAgent` with `should_fail` flag and configurable `health_status`). Tests:
       1. `POST /invoke` with valid `AgentRequest` JSON returns 200 and valid `AgentResponse` JSON.
       2. `POST /invoke` with a mock that returns `AgentError::Internal` returns 500 with JSON error body.
@@ -59,7 +59,7 @@ _Depends on: Group 3._
       Blocked by: "Wire router into main.rs"
       Blocking: "Run verification suite"
 
-- [ ] **Run verification suite** `[S]`
+- [x] **Run verification suite** `[S]`
       Run `cargo check -p agent-runtime`, `cargo clippy -p agent-runtime`, and `cargo test -p agent-runtime` to verify the HTTP module compiles, has no warnings, and tests pass. Also run `cargo check` and `cargo test` across the full workspace to ensure no regressions in other crates.
       Files: (none — command-line only)
       Blocked by: "Write handler integration tests"
