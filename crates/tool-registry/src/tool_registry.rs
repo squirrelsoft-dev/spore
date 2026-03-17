@@ -3,8 +3,10 @@ use std::sync::{Arc, RwLock};
 
 use agent_sdk::SkillManifest;
 
+use crate::mcp_handle::McpHandle;
 use crate::registry_error::RegistryError;
 use crate::tool_entry::ToolEntry;
+use crate::transport;
 
 pub struct ToolRegistry {
     entries: Arc<RwLock<HashMap<String, ToolEntry>>>,
@@ -53,7 +55,12 @@ impl ToolRegistry {
             .iter()
             .map(|tool_name| {
                 map.get(tool_name)
-                    .cloned()
+                    .map(|entry| ToolEntry {
+                        name: entry.name.clone(),
+                        version: entry.version.clone(),
+                        endpoint: entry.endpoint.clone(),
+                        handle: entry.handle.clone(),
+                    })
                     .ok_or_else(|| RegistryError::ToolNotFound {
                         name: tool_name.clone(),
                     })
@@ -61,8 +68,41 @@ impl ToolRegistry {
             .collect()
     }
 
-    pub fn connect(_url: &str) {
-        // TODO: real MCP connection logic in issue #9
+    pub async fn connect(&self, name: &str) -> Result<(), RegistryError> {
+        let endpoint = {
+            let entries = self.entries.read().unwrap();
+            let entry = entries.get(name).ok_or_else(|| RegistryError::ToolNotFound {
+                name: name.to_string(),
+            })?;
+            entry.endpoint.clone()
+        };
+
+        let service = transport::connect_transport(&endpoint).await?;
+        let handle = McpHandle::new(service);
+
+        let mut entries = self.entries.write().unwrap();
+        let entry = entries.get_mut(name).ok_or_else(|| RegistryError::ToolNotFound {
+            name: name.to_string(),
+        })?;
+        entry.handle = Some(handle);
+        Ok(())
+    }
+
+    pub async fn connect_all(&self) -> Result<(), RegistryError> {
+        let names: Vec<String> = {
+            let entries = self.entries.read().unwrap();
+            entries.keys().cloned().collect()
+        };
+
+        for name in &names {
+            self.connect(name).await?;
+        }
+        Ok(())
+    }
+
+    pub fn get_handle(&self, name: &str) -> Option<McpHandle> {
+        let entries = self.entries.read().unwrap();
+        entries.get(name).and_then(|entry| entry.handle.clone())
     }
 
     pub fn get(&self, name: &str) -> Option<ToolEntry> {

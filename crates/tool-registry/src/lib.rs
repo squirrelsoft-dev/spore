@@ -1,7 +1,10 @@
+mod mcp_handle;
 mod registry_error;
 mod tool_entry;
 mod tool_registry;
+mod transport;
 
+pub use mcp_handle::McpHandle;
 pub use registry_error::RegistryError;
 pub use tool_entry::ToolEntry;
 pub use tool_registry::ToolRegistry;
