@@ -9,5 +9,8 @@ rmcp = { version = "0.16", features = ["client", "transport-async-rw"] }
 tool-registry = { path = "../tool-registry" }
 agent-sdk = { path = "../agent-sdk" }
 skill-loader = { path = "../skill-loader" }
+serde_json = "1"
 tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 futures = "0.3"

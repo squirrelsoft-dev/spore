@@ -10,9 +10,12 @@ dependencies = [
  "futures",
  "rig-core",
  "rmcp 0.16.0",
+ "serde_json",
  "skill-loader",
  "tokio",
  "tool-registry",
+ "tracing",
+ "tracing-subscriber",
 ]
 
 [[package]]
