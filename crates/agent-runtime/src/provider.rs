@@ -4,7 +4,7 @@ use std::fmt;
 use agent_sdk::SkillManifest;
 use rig::agent::Agent;
 use rig::client::CompletionClient;
-use rig::completion::Prompt;
+use rig::completion::{Prompt, PromptError};
 use rig::providers::{anthropic, openai};
 use tool_registry::ToolRegistry;
 
@@ -25,6 +25,8 @@ pub enum ProviderError {
     ClientBuild(String),
     /// An error occurred while prompting the agent.
     Prompt(String),
+    /// The agent exceeded the maximum number of turns.
+    MaxTurnsExceeded { max_turns: u32 },
 }
 
 impl fmt::Display for ProviderError {
@@ -45,6 +47,9 @@ impl fmt::Display for ProviderError {
             }
             Self::Prompt(msg) => {
                 write!(f, "prompt error: {msg}")
+            }
+            Self::MaxTurnsExceeded { max_turns } => {
+                write!(f, "max turns exceeded: {max_turns} turns")
             }
         }
     }
@@ -73,15 +78,26 @@ impl BuiltAgent {
     /// Send a prompt to the underlying agent and return the response text.
     pub async fn prompt(&self, input: &str) -> Result<String, ProviderError> {
         match self {
-            Self::OpenAi(agent) => agent
-                .prompt(input)
-                .await
-                .map_err(|e| ProviderError::Prompt(e.to_string())),
-            Self::Anthropic(agent) => agent
-                .prompt(input)
-                .await
-                .map_err(|e| ProviderError::Prompt(e.to_string())),
+            Self::OpenAi(agent) => {
+                agent.prompt(input).await.map_err(map_prompt_error)
+            }
+            Self::Anthropic(agent) => {
+                agent.prompt(input).await.map_err(map_prompt_error)
+            }
         }
+    }
+}
+
+/// Map a rig-core `PromptError` to a `ProviderError`, extracting the
+/// `MaxTurnsError` variant into `ProviderError::MaxTurnsExceeded`.
+fn map_prompt_error(e: PromptError) -> ProviderError {
+    match e {
+        PromptError::MaxTurnsError { max_turns, .. } => {
+            ProviderError::MaxTurnsExceeded {
+                max_turns: max_turns as u32,
+            }
+        }
+        other => ProviderError::Prompt(other.to_string()),
     }
 }
 
@@ -215,6 +231,12 @@ mod tests {
     fn prompt_error_displays_message() {
         let err = ProviderError::Prompt("timeout".to_string());
         assert_eq!(err.to_string(), "prompt error: timeout");
+    }
+
+    #[test]
+    fn max_turns_exceeded_displays_message() {
+        let err = ProviderError::MaxTurnsExceeded { max_turns: 10 };
+        assert_eq!(err.to_string(), "max turns exceeded: 10 turns");
     }
 
     #[test]
