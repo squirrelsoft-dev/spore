@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use agent_runtime::config::RuntimeConfig;
+use agent_runtime::constraint_enforcer::ConstraintEnforcer;
 use agent_runtime::http;
 use agent_runtime::provider;
 use agent_runtime::runtime_agent::RuntimeAgent;
@@ -65,7 +66,11 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Step 6: Wrap as MicroAgent
     tracing::info!("[6/7] Creating runtime agent");
     let runtime_agent = RuntimeAgent::new(manifest, agent, registry.clone());
-    let micro_agent: Arc<dyn MicroAgent> = Arc::new(runtime_agent);
+
+    // Step 6.5: Apply constraint enforcement
+    tracing::info!("[6.5/7] Applying constraint enforcement");
+    let enforced = ConstraintEnforcer::new(Arc::new(runtime_agent));
+    let micro_agent: Arc<dyn MicroAgent> = Arc::new(enforced);
 
     // Step 7: Start HTTP server
     tracing::info!(bind_addr = %config.bind_addr, "[7/7] Starting HTTP server");
