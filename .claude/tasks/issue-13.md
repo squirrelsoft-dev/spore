@@ -36,7 +36,7 @@ _Depends on: Group 1._
 
 _Depends on: Group 1._
 
-- [ ] **Implement ConstraintEnforcer struct with confidence and escalation checks** `[M]`
+- [x] **Implement ConstraintEnforcer struct with confidence and escalation checks** `[M]`
       Create `crates/agent-runtime/src/constraint_enforcer.rs`. Define a `ConstraintEnforcer` struct wrapping an `Arc<dyn MicroAgent>` and implementing `MicroAgent` itself. The enforcer:
       1. Delegates `manifest()` and `health()` to the inner agent.
       2. In `invoke()`, calls `self.inner.invoke(request).await`, then performs a post-invocation confidence check: if `(response.confidence as f64) < manifest.constraints.confidence_threshold`, set `response.escalated = true` and `response.escalate_to = manifest.constraints.escalate_to.clone()`.
@@ -46,7 +46,7 @@ _Depends on: Group 1._
       Blocked by: "Add `escalate_to` field to `AgentResponse`"
       Blocking: "Wire ConstraintEnforcer into main.rs"
 
-- [ ] **Map rig-core MaxTurnsError to AgentError::MaxTurnsExceeded** `[S]`
+- [x] **Map rig-core MaxTurnsError to AgentError::MaxTurnsExceeded** `[S]`
       In `crates/agent-runtime/src/runtime_agent.rs`, update the `invoke()` method to inspect the error from `self.agent.prompt()`. Currently all errors are mapped to `AgentError::Internal(e.to_string())`. Change this to detect `MaxTurnsError` and map it to `AgentError::MaxTurnsExceeded { turns: manifest.constraints.max_turns }`. Since `BuiltAgent::prompt()` returns `ProviderError::Prompt(String)` which loses the type, check for the "MaxTurnError" substring as a pragmatic fallback, or improve `ProviderError` to carry a typed enum.
       Files: `crates/agent-runtime/src/runtime_agent.rs`, `crates/agent-runtime/src/provider.rs`
       Blocked by: "Set `default_max_turns` from constraints at agent build time"
