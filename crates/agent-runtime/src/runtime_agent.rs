@@ -7,7 +7,7 @@ use agent_sdk::{
 use serde_json::Value;
 use tool_registry::ToolRegistry;
 
-use crate::provider::BuiltAgent;
+use crate::provider::{BuiltAgent, ProviderError};
 
 /// A runtime agent that bridges a rig-core `Agent` with the spore `MicroAgent` trait.
 ///
@@ -42,7 +42,12 @@ impl MicroAgent for RuntimeAgent {
             .agent
             .prompt(&request.input)
             .await
-            .map_err(|e| AgentError::Internal(e.to_string()))?;
+            .map_err(|e| match e {
+                ProviderError::MaxTurnsExceeded { .. } => AgentError::MaxTurnsExceeded {
+                    turns: self.manifest.constraints.max_turns,
+                },
+                other => AgentError::Internal(other.to_string()),
+            })?;
         Ok(AgentResponse::success(request.id, Value::String(output)))
     }
 
