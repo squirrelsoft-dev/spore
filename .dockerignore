@@ -1,0 +1,39 @@
+# Build artifacts
+target/
+debug/
+*.pdb
+
+# Version control
+.git/
+
+# Worktrees
+.worktrees/
+
+# Claude Code
+.claude/
+
+# Documentation (skill files re-included below)
+*.md
+
+# Re-include skill files needed at runtime
+!skills/
+!skills/*.md
+
+# Editor / IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Environment / secrets
+.env
+.env.*
+
+# Docker (not needed inside build context)
+Dockerfile
+.dockerignore

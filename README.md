@@ -127,6 +127,62 @@ The third agent they produce together is the **Deploy Agent** (`deploy-agent.md`
 | Async runtime | `tokio` | Standard Rust async runtime |
 | Serialization | `serde` / `schemars` | Skill file parsing and JSON schema generation |
 
+## Docker
+
+### Build
+
+```sh
+docker build --build-arg SKILL_NAME=echo -t spore-echo .
+```
+
+The `SKILL_NAME` build argument sets the default skill the agent loads at startup. All skill files in `skills/` are bundled into the image, so you can override `SKILL_NAME` at runtime with `-e SKILL_NAME=other-skill`.
+
+### Run
+
+```sh
+docker run -p 8080:8080 -e ANTHROPIC_API_KEY=your-key-here spore-echo
+```
+
+Verify the agent is running with a health check:
+
+```sh
+curl http://localhost:8080/health
+```
+
+### Image Size
+
+```sh
+docker images spore-echo
+```
+
+Images are statically compiled Rust binaries on a `scratch` base with no OS layer. Expected size is typically under 10 MB.
+
+### Environment Variables
+
+| Variable | Required | Default | Description |
+|---|---|---|---|
+| `SKILL_NAME` | Yes (build arg) | `echo` | Name of the skill to load |
+| `SKILL_DIR` | No | `/skills` | Directory containing skill `.md` files |
+| `BIND_ADDR` | No | `0.0.0.0:8080` | Socket address for the HTTP server |
+| `TOOL_ENDPOINTS` | No | `echo-tool=mcp://localhost:7001` | Comma-separated `name=endpoint` pairs for MCP tool servers |
+| `ANTHROPIC_API_KEY` | If provider is `anthropic` | — | API key for Anthropic-backed skills |
+| `OPENAI_API_KEY` | If provider is `openai` | — | API key for OpenAI-backed skills |
+| `RUST_LOG` | No | `info` | Controls tracing verbosity |
+
+### Debugging
+
+The production image uses `FROM scratch`, which means there is no shell, no package manager, and no utilities inside the container. `docker exec` will not work because there is no `/bin/sh` to invoke.
+
+Two workarounds:
+
+1. **Extract the binary with `docker cp`.** Copy the compiled binary out of a stopped container to inspect or run it locally:
+
+```sh
+docker cp <container_id>:/agent-runtime ./agent-runtime
+```
+
+2. **Temporarily switch to `FROM alpine`.** Replace `FROM scratch` with `FROM alpine` in the final stage of the Dockerfile. This adds a shell and common utilities so you can `docker exec -it <container_id> /bin/sh` into the running container for interactive debugging. Remember to switch back to `FROM scratch` for production builds.
+
 ## Key Properties
 
 **Single-responsibility agents.** Each agent does one thing. Debug, test, and version them independently.
