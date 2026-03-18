@@ -45,6 +45,7 @@ fn agent_response_json_round_trip_with_tool_calls() {
         output: json!({"answer": 42}),
         confidence: 0.875,
         escalated: true,
+        escalate_to: None,
         tool_calls: vec![ToolCallRecord {
             tool_name: "search".to_string(),
             input: json!({"q": "test"}),
@@ -151,6 +152,7 @@ fn agent_response_empty_tool_calls_round_trip() {
         output: json!("done"),
         confidence: 0.75,
         escalated: true,
+        escalate_to: None,
         tool_calls: vec![],
     };
 

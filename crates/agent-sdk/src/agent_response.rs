@@ -11,6 +11,8 @@ pub struct AgentResponse {
     pub output: Value,
     pub confidence: f32,
     pub escalated: bool,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub escalate_to: Option<String>,
     pub tool_calls: Vec<ToolCallRecord>,
 }
 
@@ -21,6 +23,7 @@ impl AgentResponse {
             output,
             confidence: 1.0,
             escalated: false,
+            escalate_to: None,
             tool_calls: vec![],
         }
     }
