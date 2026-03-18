@@ -41,6 +41,7 @@ impl IntoResponse for AppError {
             AgentError::ToolCallFailed { .. } => StatusCode::BAD_GATEWAY,
             AgentError::ConfidenceTooLow { .. } => StatusCode::OK,
             AgentError::MaxTurnsExceeded { .. } => StatusCode::UNPROCESSABLE_ENTITY,
+            AgentError::ActionDisallowed { .. } => StatusCode::FORBIDDEN,
             AgentError::Internal(_) => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (status, Json(self.0)).into_response()
@@ -149,6 +150,20 @@ mod tests {
         let expected = AgentError::MaxTurnsExceeded { turns: 10 };
         let response = AppError(expected.clone()).into_response();
         assert_eq!(response.status(), StatusCode::UNPROCESSABLE_ENTITY);
+
+        let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
+        let parsed: AgentError = serde_json::from_slice(&body).unwrap();
+        assert_eq!(parsed, expected);
+    }
+
+    #[tokio::test]
+    async fn action_disallowed_returns_403() {
+        let expected = AgentError::ActionDisallowed {
+            action: "write".into(),
+            allowed: vec!["read".into(), "query".into()],
+        };
+        let response = AppError(expected.clone()).into_response();
+        assert_eq!(response.status(), StatusCode::FORBIDDEN);
 
         let body = to_bytes(response.into_body(), usize::MAX).await.unwrap();
         let parsed: AgentError = serde_json::from_slice(&body).unwrap();

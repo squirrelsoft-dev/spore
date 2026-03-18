@@ -3,9 +3,21 @@ use std::fmt;
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum AgentError {
-    ToolCallFailed { tool: String, reason: String },
-    ConfidenceTooLow { confidence: f32, threshold: f32 },
-    MaxTurnsExceeded { turns: u32 },
+    ToolCallFailed {
+        tool: String,
+        reason: String,
+    },
+    ConfidenceTooLow {
+        confidence: f32,
+        threshold: f32,
+    },
+    MaxTurnsExceeded {
+        turns: u32,
+    },
+    ActionDisallowed {
+        action: String,
+        allowed: Vec<String>,
+    },
     Internal(String),
 }
 
@@ -27,6 +39,14 @@ impl fmt::Display for AgentError {
             }
             AgentError::MaxTurnsExceeded { turns } => {
                 write!(f, "Max turns exceeded: {} turns used", turns)
+            }
+            AgentError::ActionDisallowed { action, allowed } => {
+                write!(
+                    f,
+                    "Action '{}' is not in allowed actions: [{}]",
+                    action,
+                    allowed.join(", ")
+                )
             }
             AgentError::Internal(msg) => write!(f, "Internal error: {}", msg),
         }
