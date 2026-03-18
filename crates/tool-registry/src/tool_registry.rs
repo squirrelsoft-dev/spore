@@ -59,6 +59,7 @@ impl ToolRegistry {
                         name: entry.name.clone(),
                         version: entry.version.clone(),
                         endpoint: entry.endpoint.clone(),
+                        action_type: entry.action_type.clone(),
                         handle: entry.handle.clone(),
                     })
                     .ok_or_else(|| RegistryError::ToolNotFound {
