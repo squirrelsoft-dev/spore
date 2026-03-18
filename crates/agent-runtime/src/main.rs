@@ -96,6 +96,7 @@ fn register_tool_endpoints(
             name: name.trim().to_string(),
             version: "0.1.0".to_string(),
             endpoint: endpoint.trim().to_string(),
+            action_type: None,
             handle: None,
         };
         tracing::info!(name = %entry.name, endpoint = %entry.endpoint, "Registering tool");

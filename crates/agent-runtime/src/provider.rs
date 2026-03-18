@@ -133,7 +133,7 @@ async fn resolve_tools(
     registry: &ToolRegistry,
     manifest: &SkillManifest,
 ) -> Result<Vec<rig::tool::rmcp::McpTool>, ProviderError> {
-    tool_bridge::resolve_mcp_tools(registry, manifest)
+    tool_bridge::resolve_mcp_tools(registry, manifest, &manifest.constraints.allowed_actions)
         .await
         .map_err(|e| ProviderError::ClientBuild(e.to_string()))
 }

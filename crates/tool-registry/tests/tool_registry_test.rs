@@ -8,6 +8,7 @@ fn make_entry(name: &str) -> ToolEntry {
         name: name.to_string(),
         version: "1.0.0".to_string(),
         endpoint: "http://localhost:8080".to_string(),
+        action_type: None,
         handle: None,
     }
 }
