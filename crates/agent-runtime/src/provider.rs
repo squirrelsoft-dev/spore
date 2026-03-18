@@ -4,7 +4,7 @@ use std::fmt;
 use agent_sdk::SkillManifest;
 use rig::agent::Agent;
 use rig::client::CompletionClient;
-use rig::completion::Prompt;
+use rig::completion::{Prompt, PromptError};
 use rig::providers::{anthropic, openai};
 use tool_registry::ToolRegistry;
 
@@ -25,6 +25,8 @@ pub enum ProviderError {
     ClientBuild(String),
     /// An error occurred while prompting the agent.
     Prompt(String),
+    /// The agent exceeded the maximum number of turns.
+    MaxTurnsExceeded { max_turns: u32 },
 }
 
 impl fmt::Display for ProviderError {
@@ -45,6 +47,9 @@ impl fmt::Display for ProviderError {
             }
             Self::Prompt(msg) => {
                 write!(f, "prompt error: {msg}")
+            }
+            Self::MaxTurnsExceeded { max_turns } => {
+                write!(f, "max turns exceeded: {max_turns} turns")
             }
         }
     }
@@ -73,15 +78,26 @@ impl BuiltAgent {
     /// Send a prompt to the underlying agent and return the response text.
     pub async fn prompt(&self, input: &str) -> Result<String, ProviderError> {
         match self {
-            Self::OpenAi(agent) => agent
-                .prompt(input)
-                .await
-                .map_err(|e| ProviderError::Prompt(e.to_string())),
-            Self::Anthropic(agent) => agent
-                .prompt(input)
-                .await
-                .map_err(|e| ProviderError::Prompt(e.to_string())),
+            Self::OpenAi(agent) => {
+                agent.prompt(input).await.map_err(map_prompt_error)
+            }
+            Self::Anthropic(agent) => {
+                agent.prompt(input).await.map_err(map_prompt_error)
+            }
         }
+    }
+}
+
+/// Map a rig-core `PromptError` to a `ProviderError`, extracting the
+/// `MaxTurnsError` variant into `ProviderError::MaxTurnsExceeded`.
+fn map_prompt_error(e: PromptError) -> ProviderError {
+    match e {
+        PromptError::MaxTurnsError { max_turns, .. } => {
+            ProviderError::MaxTurnsExceeded {
+                max_turns: max_turns as u32,
+            }
+        }
+        other => ProviderError::Prompt(other.to_string()),
     }
 }
 
@@ -106,10 +122,11 @@ pub async fn build_agent(
     tracing::info!(provider, model = %model_name, "building agent");
 
     let tools = resolve_tools(registry, manifest).await?;
+    let max_turns = manifest.constraints.max_turns;
 
     match provider {
-        "openai" => build_openai_agent(model_name, preamble, temperature, tools),
-        "anthropic" => build_anthropic_agent(model_name, preamble, temperature, tools),
+        "openai" => build_openai_agent(model_name, preamble, temperature, tools, max_turns),
+        "anthropic" => build_anthropic_agent(model_name, preamble, temperature, tools, max_turns),
         other => Err(ProviderError::UnsupportedProvider {
             provider: other.to_string(),
         }),
@@ -133,7 +150,7 @@ async fn resolve_tools(
     registry: &ToolRegistry,
     manifest: &SkillManifest,
 ) -> Result<Vec<rig::tool::rmcp::McpTool>, ProviderError> {
-    tool_bridge::resolve_mcp_tools(registry, manifest)
+    tool_bridge::resolve_mcp_tools(registry, manifest, &manifest.constraints.allowed_actions)
         .await
         .map_err(|e| ProviderError::ClientBuild(e.to_string()))
 }
@@ -144,6 +161,7 @@ fn build_openai_agent(
     preamble: &str,
     temperature: f64,
     tools: Vec<rig::tool::rmcp::McpTool>,
+    max_turns: u32,
 ) -> Result<BuiltAgent, ProviderError> {
     let api_key = read_api_key("openai", "OPENAI_API_KEY")?;
     let client = openai::Client::new(api_key)
@@ -153,7 +171,7 @@ fn build_openai_agent(
         .agent(model_name)
         .preamble(preamble)
         .temperature(temperature);
-    let agent = tool_bridge::build_agent_with_tools(builder, tools);
+    let agent = tool_bridge::build_agent_with_tools(builder, tools, max_turns);
 
     tracing::info!("openai agent built successfully");
     Ok(BuiltAgent::OpenAi(agent))
@@ -165,6 +183,7 @@ fn build_anthropic_agent(
     preamble: &str,
     temperature: f64,
     tools: Vec<rig::tool::rmcp::McpTool>,
+    max_turns: u32,
 ) -> Result<BuiltAgent, ProviderError> {
     let api_key = read_api_key("anthropic", "ANTHROPIC_API_KEY")?;
     let client = anthropic::Client::builder()
@@ -176,7 +195,7 @@ fn build_anthropic_agent(
         .agent(model_name)
         .preamble(preamble)
         .temperature(temperature);
-    let agent = tool_bridge::build_agent_with_tools(builder, tools);
+    let agent = tool_bridge::build_agent_with_tools(builder, tools, max_turns);
 
     tracing::info!("anthropic agent built successfully");
     Ok(BuiltAgent::Anthropic(agent))
@@ -215,6 +234,12 @@ mod tests {
     fn prompt_error_displays_message() {
         let err = ProviderError::Prompt("timeout".to_string());
         assert_eq!(err.to_string(), "prompt error: timeout");
+    }
+
+    #[test]
+    fn max_turns_exceeded_displays_message() {
+        let err = ProviderError::MaxTurnsExceeded { max_turns: 10 };
+        assert_eq!(err.to_string(), "max turns exceeded: 10 turns");
     }
 
     #[test]

@@ -138,6 +138,7 @@ fn make_registry_with_entry(name: &str, endpoint: &str) -> ToolRegistry {
             name: name.to_string(),
             version: "1.0.0".to_string(),
             endpoint: endpoint.to_string(),
+            action_type: None,
             handle: None,
         })
         .expect("register entry");

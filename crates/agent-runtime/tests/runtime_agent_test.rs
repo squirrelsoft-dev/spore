@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use agent_runtime::provider;
+use agent_runtime::provider::{self, BuiltAgent, ProviderError};
 use agent_runtime::runtime_agent::RuntimeAgent;
 use agent_sdk::{
     AgentRequest, Constraints, HealthStatus, MicroAgent, ModelConfig, OutputSchema, SkillManifest,
@@ -10,6 +10,11 @@ use tool_registry::ToolRegistry;
 
 /// Build a test `SkillManifest` with sensible defaults.
 fn test_manifest() -> SkillManifest {
+    test_manifest_with_max_turns(1)
+}
+
+/// Build a test `SkillManifest` with a configurable `max_turns` value.
+fn test_manifest_with_max_turns(max_turns: u32) -> SkillManifest {
     SkillManifest {
         name: "test-agent".to_string(),
         version: "0.1.0".to_string(),
@@ -22,7 +27,7 @@ fn test_manifest() -> SkillManifest {
         preamble: "You are a test agent.".to_string(),
         tools: vec![],
         constraints: Constraints {
-            max_turns: 1,
+            max_turns,
             confidence_threshold: 0.5,
             escalate_to: None,
             allowed_actions: vec![],
@@ -94,6 +99,76 @@ async fn test_runtime_agent_is_dyn_compatible() {
     // Verify the trait object is functional.
     assert_eq!(dyn_agent.manifest().name, "test-agent");
     assert_eq!(dyn_agent.health().await, HealthStatus::Healthy);
+}
+
+/// Extract the `default_max_turns` value from a `BuiltAgent` by matching on
+/// the provider variant and reading the inner rig-core `Agent` field.
+fn extract_default_max_turns(built_agent: &BuiltAgent) -> Option<usize> {
+    match built_agent {
+        BuiltAgent::OpenAi(agent) => agent.default_max_turns,
+        BuiltAgent::Anthropic(agent) => agent.default_max_turns,
+    }
+}
+
+#[tokio::test]
+async fn test_default_max_turns_set_on_built_agent() {
+    // SAFETY: tests are serialized by the single-threaded tokio runtime.
+    unsafe {
+        std::env::set_var("OPENAI_API_KEY", "sk-fake-test-key-for-integration-tests");
+    }
+
+    let manifest = test_manifest(); // max_turns = 1
+    let registry = Arc::new(ToolRegistry::new());
+    let built_agent = provider::build_agent(&manifest, &registry)
+        .await
+        .expect("build_agent should succeed with a fake API key");
+
+    assert_eq!(
+        extract_default_max_turns(&built_agent),
+        Some(1),
+        "default_max_turns should match the manifest's max_turns of 1"
+    );
+}
+
+#[tokio::test]
+async fn test_default_max_turns_varies_with_manifest() {
+    // SAFETY: tests are serialized by the single-threaded tokio runtime.
+    unsafe {
+        std::env::set_var("OPENAI_API_KEY", "sk-fake-test-key-for-integration-tests");
+    }
+
+    let registry = Arc::new(ToolRegistry::new());
+
+    let manifest_5 = test_manifest_with_max_turns(5);
+    let agent_5 = provider::build_agent(&manifest_5, &registry)
+        .await
+        .expect("build_agent should succeed for max_turns=5");
+
+    let manifest_20 = test_manifest_with_max_turns(20);
+    let agent_20 = provider::build_agent(&manifest_20, &registry)
+        .await
+        .expect("build_agent should succeed for max_turns=20");
+
+    assert_eq!(
+        extract_default_max_turns(&agent_5),
+        Some(5),
+        "default_max_turns should be 5 for manifest with max_turns=5"
+    );
+    assert_eq!(
+        extract_default_max_turns(&agent_20),
+        Some(20),
+        "default_max_turns should be 20 for manifest with max_turns=20"
+    );
+}
+
+#[test]
+fn test_provider_error_max_turns_display() {
+    let err = ProviderError::MaxTurnsExceeded { max_turns: 5 };
+    let display = err.to_string();
+    assert!(
+        display.contains("5"),
+        "Display output should contain the max_turns value '5', got: {display}"
+    );
 }
 
 #[tokio::test]

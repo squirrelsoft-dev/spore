@@ -5,6 +5,7 @@ fn make_tool_entry() -> ToolEntry {
         name: "my-tool".to_string(),
         version: "1.0.0".to_string(),
         endpoint: "http://localhost:8080".to_string(),
+        action_type: None,
         handle: None,
     }
 }
@@ -25,6 +26,7 @@ fn json_round_trip_unix_socket() {
         name: "unix-tool".to_string(),
         version: "2.3.1".to_string(),
         endpoint: "unix:///var/run/tool.sock".to_string(),
+        action_type: None,
         handle: None,
     };
     let json = serde_json::to_string(&entry).expect("serialize");

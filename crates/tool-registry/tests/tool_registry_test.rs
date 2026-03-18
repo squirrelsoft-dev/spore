@@ -8,6 +8,7 @@ fn make_entry(name: &str) -> ToolEntry {
         name: name.to_string(),
         version: "1.0.0".to_string(),
         endpoint: "http://localhost:8080".to_string(),
+        action_type: None,
         handle: None,
     }
 }
@@ -133,4 +134,91 @@ fn tool_exists_trait_impl() {
     let checker: &dyn ToolExists = &registry;
     assert!(checker.tool_exists("web_search"));
     assert!(!checker.tool_exists("nonexistent"));
+}
+
+// --- allowed_actions filtering tests ---
+
+fn make_entry_with_action(name: &str, action_type: Option<&str>) -> ToolEntry {
+    ToolEntry {
+        name: name.to_string(),
+        version: "1.0.0".to_string(),
+        endpoint: "http://localhost:8080".to_string(),
+        action_type: action_type.map(|s| s.to_string()),
+        handle: None,
+    }
+}
+
+/// Mirrors the allowed_actions filtering logic from `resolve_mcp_tools` in
+/// `agent-runtime/src/tool_bridge.rs`. When `allowed_actions` is empty, all
+/// entries pass through. Otherwise, entries with no `action_type` are always
+/// included, and entries whose `action_type` matches any allowed action are
+/// included.
+fn filter_by_allowed_actions(entries: Vec<ToolEntry>, allowed_actions: &[&str]) -> Vec<ToolEntry> {
+    if allowed_actions.is_empty() {
+        entries
+    } else {
+        entries
+            .into_iter()
+            .filter(|entry| match &entry.action_type {
+                None => true,
+                Some(t) => allowed_actions.iter().any(|a| a == t),
+            })
+            .collect()
+    }
+}
+
+#[test]
+fn allowed_actions_excludes_non_matching_action_type() {
+    let entries = vec![
+        make_entry_with_action("tool_read", Some("read")),
+        make_entry_with_action("tool_write", Some("write")),
+        make_entry_with_action("tool_query", Some("query")),
+    ];
+
+    let result = filter_by_allowed_actions(entries, &["read", "query"]);
+
+    assert_eq!(result.len(), 2);
+    assert_eq!(result[0].name, "tool_read");
+    assert_eq!(result[1].name, "tool_query");
+}
+
+#[test]
+fn allowed_actions_includes_tools_with_no_action_type() {
+    let entries = vec![
+        make_entry_with_action("tool_none", None),
+        make_entry_with_action("tool_write", Some("write")),
+    ];
+
+    let result = filter_by_allowed_actions(entries, &["read"]);
+
+    assert_eq!(result.len(), 1);
+    assert_eq!(result[0].name, "tool_none");
+}
+
+#[test]
+fn empty_allowed_actions_passes_all_tools() {
+    let entries = vec![
+        make_entry_with_action("tool_read", Some("read")),
+        make_entry_with_action("tool_write", Some("write")),
+        make_entry_with_action("tool_none", None),
+    ];
+
+    let result = filter_by_allowed_actions(entries, &[]);
+
+    assert_eq!(result.len(), 3);
+    assert_eq!(result[0].name, "tool_read");
+    assert_eq!(result[1].name, "tool_write");
+    assert_eq!(result[2].name, "tool_none");
+}
+
+#[test]
+fn allowed_actions_excludes_all_when_none_match() {
+    let entries = vec![
+        make_entry_with_action("tool_write", Some("write")),
+        make_entry_with_action("tool_admin", Some("admin")),
+    ];
+
+    let result = filter_by_allowed_actions(entries, &["read"]);
+
+    assert_eq!(result.len(), 0);
 }
