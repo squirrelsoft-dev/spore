@@ -56,7 +56,7 @@ _Depends on: Group 1._
 
 _Depends on: Groups 2 and 3._
 
-- [ ] **Wire ConstraintEnforcer into main.rs** `[S]`
+- [x] **Wire ConstraintEnforcer into main.rs** `[S]`
       Modify `crates/agent-runtime/src/main.rs` to wrap the `RuntimeAgent` with `ConstraintEnforcer` before passing it to the HTTP layer. Between step 6 ("Creating runtime agent") and step 7 ("Starting HTTP server"), wrap: `let enforced = ConstraintEnforcer::new(Arc::new(runtime_agent));` then `let micro_agent: Arc<dyn MicroAgent> = Arc::new(enforced);`. Add a log line like `tracing::info!("[6.5/7] Applying constraint enforcement")`.
       Files: `crates/agent-runtime/src/main.rs`
       Blocked by: "Implement ConstraintEnforcer struct with confidence and escalation checks", "Map rig-core MaxTurnsError to AgentError::MaxTurnsExceeded"
