@@ -46,10 +46,12 @@ pub async fn resolve_mcp_tools(
 /// Attaches resolved MCP tools to a rig-core `AgentBuilder` and produces an `Agent`.
 ///
 /// Each `McpTool` is boxed as a `dyn ToolDyn` and added to the builder before
-/// calling `.build()` to finalize the agent.
+/// calling `.build()` to finalize the agent. The `max_turns` parameter sets the
+/// agent's default turn limit via `AgentBuilder::default_max_turns()`.
 pub fn build_agent_with_tools<M, P>(
     builder: AgentBuilder<M, P, NoToolConfig>,
     tools: Vec<McpTool>,
+    max_turns: u32,
 ) -> Agent<M, P>
 where
     M: CompletionModel,
@@ -59,5 +61,8 @@ where
         .into_iter()
         .map(|t| Box::new(t) as Box<dyn ToolDyn>)
         .collect();
-    builder.tools(boxed).build()
+    builder
+        .default_max_turns(max_turns as usize)
+        .tools(boxed)
+        .build()
 }

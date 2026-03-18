@@ -106,10 +106,11 @@ pub async fn build_agent(
     tracing::info!(provider, model = %model_name, "building agent");
 
     let tools = resolve_tools(registry, manifest).await?;
+    let max_turns = manifest.constraints.max_turns;
 
     match provider {
-        "openai" => build_openai_agent(model_name, preamble, temperature, tools),
-        "anthropic" => build_anthropic_agent(model_name, preamble, temperature, tools),
+        "openai" => build_openai_agent(model_name, preamble, temperature, tools, max_turns),
+        "anthropic" => build_anthropic_agent(model_name, preamble, temperature, tools, max_turns),
         other => Err(ProviderError::UnsupportedProvider {
             provider: other.to_string(),
         }),
@@ -144,6 +145,7 @@ fn build_openai_agent(
     preamble: &str,
     temperature: f64,
     tools: Vec<rig::tool::rmcp::McpTool>,
+    max_turns: u32,
 ) -> Result<BuiltAgent, ProviderError> {
     let api_key = read_api_key("openai", "OPENAI_API_KEY")?;
     let client = openai::Client::new(api_key)
@@ -153,7 +155,7 @@ fn build_openai_agent(
         .agent(model_name)
         .preamble(preamble)
         .temperature(temperature);
-    let agent = tool_bridge::build_agent_with_tools(builder, tools);
+    let agent = tool_bridge::build_agent_with_tools(builder, tools, max_turns);
 
     tracing::info!("openai agent built successfully");
     Ok(BuiltAgent::OpenAi(agent))
@@ -165,6 +167,7 @@ fn build_anthropic_agent(
     preamble: &str,
     temperature: f64,
     tools: Vec<rig::tool::rmcp::McpTool>,
+    max_turns: u32,
 ) -> Result<BuiltAgent, ProviderError> {
     let api_key = read_api_key("anthropic", "ANTHROPIC_API_KEY")?;
     let client = anthropic::Client::builder()
@@ -176,7 +179,7 @@ fn build_anthropic_agent(
         .agent(model_name)
         .preamble(preamble)
         .temperature(temperature);
-    let agent = tool_bridge::build_agent_with_tools(builder, tools);
+    let agent = tool_bridge::build_agent_with_tools(builder, tools, max_turns);
 
     tracing::info!("anthropic agent built successfully");
     Ok(BuiltAgent::Anthropic(agent))
