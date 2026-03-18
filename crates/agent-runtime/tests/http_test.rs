@@ -71,6 +71,7 @@ impl MicroAgent for MockAgent {
                 output: json!({"result": "ok"}),
                 confidence: 0.95,
                 escalated: false,
+                escalate_to: None,
                 tool_calls: vec![],
             }),
             ErrorMode::Internal => Err(AgentError::Internal("mock failure".to_string())),

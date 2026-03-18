@@ -3,18 +3,34 @@ use rig::agent::{Agent, AgentBuilder, NoToolConfig, PromptHook};
 use rig::completion::CompletionModel;
 use rig::tool::rmcp::McpTool;
 use rig::tool::ToolDyn;
-use tool_registry::{RegistryError, ToolRegistry};
+use tool_registry::{RegistryError, ToolEntry, ToolRegistry};
 
 /// Discovers MCP tools from connected handles and wraps them as `McpTool`.
 ///
-/// Resolves tool entries for the given manifest, then queries each connected
-/// MCP server to list its available tools. Returns a flat list of `McpTool`
+/// Resolves tool entries for the given manifest, then filters out any entries
+/// whose `action_type` is not in the provided `allowed_actions` list. If
+/// `allowed_actions` is empty, no filtering is applied. Entries with no
+/// `action_type` are always included. Finally, queries each connected MCP
+/// server to list its available tools and returns a flat list of `McpTool`
 /// instances ready for attachment to a rig-core agent.
 pub async fn resolve_mcp_tools(
     registry: &ToolRegistry,
     manifest: &SkillManifest,
+    allowed_actions: &[String],
 ) -> Result<Vec<McpTool>, RegistryError> {
     let entries = registry.resolve_for_skill(manifest)?;
+
+    let entries: Vec<ToolEntry> = if allowed_actions.is_empty() {
+        entries
+    } else {
+        entries
+            .into_iter()
+            .filter(|entry| match &entry.action_type {
+                None => true,
+                Some(t) => allowed_actions.iter().any(|a| a == t),
+            })
+            .collect()
+    };
 
     let futures = entries.iter().filter_map(|entry| {
         entry.handle.as_ref().map(|handle| async move {
@@ -46,10 +62,12 @@ pub async fn resolve_mcp_tools(
 /// Attaches resolved MCP tools to a rig-core `AgentBuilder` and produces an `Agent`.
 ///
 /// Each `McpTool` is boxed as a `dyn ToolDyn` and added to the builder before
-/// calling `.build()` to finalize the agent.
+/// calling `.build()` to finalize the agent. The `max_turns` parameter sets the
+/// agent's default turn limit via `AgentBuilder::default_max_turns()`.
 pub fn build_agent_with_tools<M, P>(
     builder: AgentBuilder<M, P, NoToolConfig>,
     tools: Vec<McpTool>,
+    max_turns: u32,
 ) -> Agent<M, P>
 where
     M: CompletionModel,
@@ -59,5 +77,8 @@ where
         .into_iter()
         .map(|t| Box::new(t) as Box<dyn ToolDyn>)
         .collect();
-    builder.tools(boxed).build()
+    builder
+        .default_max_turns(max_turns as usize)
+        .tools(boxed)
+        .build()
 }
