@@ -20,13 +20,13 @@ _Tasks in this group can be done in parallel._
 
 _Depends on: Group 1._
 
-- [ ] **Set `default_max_turns` from constraints at agent build time** `[S]`
+- [x] **Set `default_max_turns` from constraints at agent build time** `[S]`
       Modify `crates/agent-runtime/src/tool_bridge.rs` in `build_agent_with_tools()` to accept `&Constraints` as a parameter (or just `max_turns: u32`) and call `.default_max_turns(constraints.max_turns as usize)` on the builder before calling `.tools(boxed).build()`. Update the call site in `crates/agent-runtime/src/provider.rs` (`build_openai_agent` and `build_anthropic_agent`) to pass the manifest's constraints. This delegates turn enforcement to rig-core's native `PromptRequest` loop, which returns `PromptError::MaxTurnsError` when the limit is hit.
       Files: `crates/agent-runtime/src/tool_bridge.rs`, `crates/agent-runtime/src/provider.rs`
       Blocked by: none (no dependency on Group 1, but grouped here for sequencing clarity)
       Blocking: "Map rig-core MaxTurnsError to AgentError::MaxTurnsExceeded"
 
-- [ ] **Filter tools by `allowed_actions` in tool resolution** `[M]`
+- [x] **Filter tools by `allowed_actions` in tool resolution** `[M]`
       Add an `action_type: Option<String>` field to `ToolEntry` in `crates/tool-registry/src/tool_entry.rs` (with `#[serde(default, skip_serializing_if = "Option::is_none")]`). In `crates/agent-runtime/src/tool_bridge.rs`, modify `resolve_mcp_tools()` to accept `&[String]` for allowed_actions and filter `entries` by `action_type` — if `allowed_actions` is non-empty, exclude tools whose `action_type` is `Some(t)` where `t` is not in the allowed list. If a tool's `action_type` is `None`, include it (no restriction). This is structural enforcement: disallowed tools are never given to the LLM.
       Files: `crates/tool-registry/src/tool_entry.rs`, `crates/agent-runtime/src/tool_bridge.rs`, `crates/agent-runtime/src/main.rs`
       Blocked by: "Add `ActionDisallowed` variant to `AgentError`"
