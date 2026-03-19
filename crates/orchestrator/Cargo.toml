@@ -4,3 +4,15 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
+agent-sdk = { path = "../agent-sdk" }
+async-trait = "0.1"
+futures = "0.3"
+reqwest = { version = "0.13", features = ["json"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+
+[dev-dependencies]
+tokio = { version = "1", features = ["macros", "rt", "net"] }
+axum = "0.8"
+uuid = { version = "1", features = ["v4"] }
