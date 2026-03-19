@@ -67,7 +67,7 @@ async fn create_mock_endpoint(
         response,
     });
     let url = start_mock_agent(config).await;
-    AgentEndpoint::new(name, description, url)
+    AgentEndpoint::new(name, description, url, reqwest::Client::new())
 }
 
 /// Builds a test `SkillManifest` suitable for orchestrator construction.

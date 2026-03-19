@@ -56,10 +56,11 @@ impl Orchestrator {
     }
 
     pub fn from_config(config: OrchestratorConfig) -> Result<Self, OrchestratorError> {
-        let agents = config
+        let client = build_shared_client();
+        let agents: Vec<AgentEndpoint> = config
             .agents
             .into_iter()
-            .map(|ac| AgentEndpoint::new(ac.name, ac.description, ac.url))
+            .map(|ac| AgentEndpoint::new(ac.name, ac.description, ac.url, client.clone()))
             .collect();
 
         let manifest = build_default_manifest();
@@ -114,27 +115,33 @@ impl Orchestrator {
         original_request: &AgentRequest,
         chain: Vec<String>,
     ) -> Result<AgentResponse, OrchestratorError> {
-        if !response.escalated {
-            return Ok(response);
+        let mut current_response = response;
+        let mut current_chain = chain;
+
+        loop {
+            if !current_response.escalated {
+                return Ok(current_response);
+            }
+
+            let target_name = match current_response.escalate_to {
+                Some(ref name) => name.clone(),
+                None => return Ok(current_response),
+            };
+
+            self.validate_escalation_depth(&current_chain)?;
+            self.validate_no_cycle(&current_chain, &target_name)?;
+
+            let endpoint =
+                self.lookup_escalation_target(&target_name, &current_chain)?;
+            let new_request = build_escalation_request(
+                original_request,
+                &target_name,
+                &current_chain,
+            );
+
+            current_response = self.try_invoke(endpoint, &new_request).await?;
+            current_chain.push(target_name);
         }
-
-        let target_name = match response.escalate_to {
-            Some(ref name) => name.clone(),
-            None => return Ok(response),
-        };
-
-        self.validate_escalation_depth(&chain)?;
-        self.validate_no_cycle(&chain, &target_name)?;
-
-        let endpoint = self.lookup_escalation_target(&target_name, &chain)?;
-        let new_request = build_escalation_request(original_request, &target_name, &chain);
-
-        let escalated_response = self.try_invoke(endpoint, &new_request).await?;
-        let mut updated_chain = chain;
-        updated_chain.push(target_name);
-
-        Box::pin(self.handle_escalation(escalated_response, original_request, updated_chain))
-            .await
     }
 
     fn validate_escalation_depth(
@@ -235,6 +242,13 @@ fn aggregate_health(statuses: Vec<HealthStatus>) -> HealthStatus {
     } else {
         HealthStatus::Unhealthy(format!("All {} agents unhealthy", total))
     }
+}
+
+fn build_shared_client() -> reqwest::Client {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(30))
+        .build()
+        .expect("failed to build HTTP client")
 }
 
 fn build_default_manifest() -> SkillManifest {

@@ -8,6 +8,10 @@ use orchestrator::error::OrchestratorError;
 use serde_json::json;
 use tokio::net::TcpListener;
 
+fn test_client() -> reqwest::Client {
+    reqwest::Client::new()
+}
+
 /// Starts a mock agent server on an ephemeral port and returns its base URL.
 ///
 /// The server responds to `POST /invoke` with a valid `AgentResponse` and
@@ -87,7 +91,7 @@ async fn mock_health_handler(
 #[tokio::test]
 async fn invoke_success() {
     let url = start_mock_server(HealthStatus::Healthy).await;
-    let endpoint = AgentEndpoint::new("test-agent", "A test agent", &url);
+    let endpoint = AgentEndpoint::new("test-agent", "A test agent", &url, test_client());
     let request = AgentRequest::new("hello".to_string());
     let request_id = request.id;
 
@@ -105,7 +109,7 @@ async fn invoke_success() {
 #[tokio::test]
 async fn invoke_http_error() {
     let url = start_error_mock_server().await;
-    let endpoint = AgentEndpoint::new("test-agent", "A test agent", &url);
+    let endpoint = AgentEndpoint::new("test-agent", "A test agent", &url, test_client());
     let request = AgentRequest::new("trigger error".to_string());
 
     let result = endpoint.invoke(&request).await;
@@ -120,7 +124,7 @@ async fn invoke_http_error() {
 #[tokio::test]
 async fn health_success() {
     let url = start_mock_server(HealthStatus::Healthy).await;
-    let endpoint = AgentEndpoint::new("test-agent", "A test agent", &url);
+    let endpoint = AgentEndpoint::new("test-agent", "A test agent", &url, test_client());
 
     let result = endpoint.health().await;
 
@@ -138,7 +142,7 @@ async fn health_connection_refused() {
     drop(listener);
 
     let url = format!("http://{}", addr);
-    let endpoint = AgentEndpoint::new("test-agent", "A test agent", &url);
+    let endpoint = AgentEndpoint::new("test-agent", "A test agent", &url, test_client());
 
     let result = endpoint.health().await;
 

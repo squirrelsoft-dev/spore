@@ -20,16 +20,14 @@ impl AgentEndpoint {
         name: impl Into<String>,
         description: impl Into<String>,
         url: impl Into<String>,
+        client: reqwest::Client,
     ) -> Self {
         let url_string: String = url.into();
         Self {
             name: name.into(),
             description: description.into(),
             url: url_string.trim_end_matches('/').to_string(),
-            client: reqwest::Client::builder()
-                .timeout(std::time::Duration::from_secs(30))
-                .build()
-                .expect("failed to build HTTP client"),
+            client,
         }
     }
 
