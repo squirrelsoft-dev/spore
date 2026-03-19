@@ -14,8 +14,8 @@ use crate::error::OrchestratorError;
 const MAX_ESCALATION_DEPTH: usize = 5;
 
 pub struct Orchestrator {
-    pub registry: HashMap<String, AgentEndpoint>,
-    pub manifest: SkillManifest,
+    registry: HashMap<String, AgentEndpoint>,
+    manifest: SkillManifest,
 }
 
 impl Orchestrator {
@@ -86,10 +86,13 @@ impl Orchestrator {
             let desc_lower = endpoint.description.to_lowercase();
             desc_lower
                 .split_whitespace()
+                .filter(|word| word.len() >= 3)
                 .any(|word| input_lower.contains(word))
         })
     }
 
+    /// Checks agent health before invoking. This adds an HTTP round-trip per
+    /// dispatch. A future optimization could cache health status with a TTL.
     async fn try_invoke(
         &self,
         endpoint: &AgentEndpoint,

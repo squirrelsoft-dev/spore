@@ -12,6 +12,8 @@ use tokio::net::TcpListener;
 ///
 /// The server responds to `POST /invoke` with a valid `AgentResponse` and
 /// `GET /health` with a JSON object containing the given `HealthStatus`.
+/// The spawned server task is dropped when the tokio runtime shuts down at
+/// test exit, which is sufficient for test isolation.
 async fn start_mock_server(health_status: HealthStatus) -> String {
     let router = build_mock_router(health_status);
     let listener = TcpListener::bind("127.0.0.1:0")
@@ -27,6 +29,8 @@ async fn start_mock_server(health_status: HealthStatus) -> String {
 }
 
 /// Starts a mock server that always returns a 500 status on `POST /invoke`.
+/// The spawned server task is dropped when the tokio runtime shuts down at
+/// test exit, which is sufficient for test isolation.
 async fn start_error_mock_server() -> String {
     let router = build_error_mock_router();
     let listener = TcpListener::bind("127.0.0.1:0")

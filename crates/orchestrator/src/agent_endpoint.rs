@@ -26,7 +26,10 @@ impl AgentEndpoint {
             name: name.into(),
             description: description.into(),
             url: url_string.trim_end_matches('/').to_string(),
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .expect("failed to build HTTP client"),
         }
     }
 
@@ -35,31 +38,27 @@ impl AgentEndpoint {
         request: &AgentRequest,
     ) -> Result<AgentResponse, OrchestratorError> {
         let invoke_url = format!("{}/invoke", self.url);
+        let make_err = |reason: String| OrchestratorError::HttpError {
+            url: invoke_url.clone(),
+            reason,
+        };
+
         let response = self
             .client
             .post(&invoke_url)
             .json(request)
             .send()
             .await
-            .map_err(|e| OrchestratorError::HttpError {
-                url: invoke_url.clone(),
-                reason: e.to_string(),
-            })?;
+            .map_err(|e| make_err(e.to_string()))?;
 
-        let response =
-            response.error_for_status().map_err(|e| {
-                OrchestratorError::HttpError {
-                    url: invoke_url.clone(),
-                    reason: e.to_string(),
-                }
-            })?;
+        let response = response
+            .error_for_status()
+            .map_err(|e| make_err(e.to_string()))?;
 
-        response.json::<AgentResponse>().await.map_err(|e| {
-            OrchestratorError::HttpError {
-                url: invoke_url,
-                reason: e.to_string(),
-            }
-        })
+        response
+            .json::<AgentResponse>()
+            .await
+            .map_err(|e| make_err(e.to_string()))
     }
 
     pub async fn health(&self) -> Result<HealthStatus, OrchestratorError> {

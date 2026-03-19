@@ -112,6 +112,34 @@ fn from_http_error_to_agent_error_internal() {
 }
 
 // ---------------------------------------------------------------------------
+// Config variant tests
+// ---------------------------------------------------------------------------
+
+#[test]
+fn display_config_contains_reason() {
+    let err = OrchestratorError::Config {
+        reason: "missing field".into(),
+    };
+    let display = format!("{}", err);
+    assert!(
+        display.contains("Config error: missing field"),
+        "expected 'Config error: missing field' in: {display}"
+    );
+}
+
+#[test]
+fn from_config_to_agent_error_internal() {
+    let err = OrchestratorError::Config {
+        reason: "bad yaml".into(),
+    };
+    let agent_err: AgentError = err.into();
+    assert!(
+        matches!(&agent_err, AgentError::Internal(msg) if msg.contains("Config error: bad yaml")),
+        "expected AgentError::Internal containing config error message, got: {agent_err:?}"
+    );
+}
+
+// ---------------------------------------------------------------------------
 // EscalationFailed edge cases
 // ---------------------------------------------------------------------------
 

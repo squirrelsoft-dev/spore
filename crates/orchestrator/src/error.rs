@@ -7,6 +7,7 @@ pub enum OrchestratorError {
     AgentUnavailable { name: String, reason: String },
     EscalationFailed { chain: Vec<String>, reason: String },
     HttpError { url: String, reason: String },
+    Config { reason: String },
 }
 
 impl fmt::Display for OrchestratorError {
@@ -28,6 +29,9 @@ impl fmt::Display for OrchestratorError {
             }
             OrchestratorError::HttpError { url, reason } => {
                 write!(f, "HTTP error calling {}: {}", url, reason)
+            }
+            OrchestratorError::Config { reason } => {
+                write!(f, "Config error: {}", reason)
             }
         }
     }

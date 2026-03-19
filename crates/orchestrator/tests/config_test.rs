@@ -97,6 +97,13 @@ fn malformed_yaml_returns_error() {
     let result = OrchestratorConfig::from_file(path.to_str().unwrap());
 
     assert!(result.is_err(), "Expected error for malformed YAML");
+    assert!(
+        matches!(
+            result.unwrap_err(),
+            orchestrator::error::OrchestratorError::Config { .. }
+        ),
+        "Expected OrchestratorError::Config variant"
+    );
 
     std::fs::remove_dir_all(&dir).ok();
 }
@@ -111,7 +118,7 @@ fn env_config_parses_agent_endpoints() {
             ),
             ("AGENT_DESCRIPTIONS", Some("a=Desc A,b=Desc B")),
         ],
-        || OrchestratorConfig::from_env(),
+        OrchestratorConfig::from_env,
     );
 
     let config = result.unwrap();
@@ -130,11 +137,18 @@ fn env_config_parses_agent_endpoints() {
 fn missing_env_var_returns_error() {
     let result = with_env_vars(
         &[("AGENT_ENDPOINTS", None), ("AGENT_DESCRIPTIONS", None)],
-        || OrchestratorConfig::from_env(),
+        OrchestratorConfig::from_env,
     );
 
     assert!(
         result.is_err(),
         "Expected error when AGENT_ENDPOINTS is not set"
+    );
+    assert!(
+        matches!(
+            result.unwrap_err(),
+            orchestrator::error::OrchestratorError::Config { .. }
+        ),
+        "Expected OrchestratorError::Config variant"
     );
 }

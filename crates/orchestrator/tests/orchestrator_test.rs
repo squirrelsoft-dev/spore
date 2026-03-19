@@ -24,6 +24,8 @@ struct MockAgentConfig {
 }
 
 /// Starts a mock agent HTTP server on a random port and returns the base URL.
+/// The spawned server task is dropped when the tokio runtime shuts down at
+/// test exit, which is sufficient for test isolation.
 async fn start_mock_agent(config: Arc<MockAgentConfig>) -> String {
     let health_config = Arc::clone(&config);
     let invoke_config = Arc::clone(&config);

@@ -44,14 +44,12 @@ impl OrchestratorConfig {
     }
 
     pub fn from_file(path: &str) -> Result<Self, OrchestratorError> {
-        let content = std::fs::read_to_string(path).map_err(|e| OrchestratorError::HttpError {
-            url: format!("config:{path}"),
-            reason: e.to_string(),
+        let content = std::fs::read_to_string(path).map_err(|e| OrchestratorError::Config {
+            reason: format!("failed to read {path}: {e}"),
         })?;
 
-        serde_yaml::from_str(&content).map_err(|e| OrchestratorError::HttpError {
-            url: format!("config:{path}"),
-            reason: e.to_string(),
+        serde_yaml::from_str(&content).map_err(|e| OrchestratorError::Config {
+            reason: format!("failed to parse {path}: {e}"),
         })
     }
 }
@@ -59,8 +57,7 @@ impl OrchestratorConfig {
 fn read_required_env(name: &str) -> Result<String, OrchestratorError> {
     let value = std::env::var(name).unwrap_or_default();
     if value.trim().is_empty() {
-        return Err(OrchestratorError::HttpError {
-            url: format!("config:{name}"),
+        return Err(OrchestratorError::Config {
             reason: format!("environment variable {name} is required but missing or empty"),
         });
     }
@@ -78,16 +75,16 @@ fn parse_comma_pairs(
         .map(|entry| {
             let (k, v) = entry
                 .split_once('=')
-                .ok_or_else(|| OrchestratorError::HttpError {
-                    url: format!("config:{var_name}"),
-                    reason: format!("invalid pair '{entry}', expected format 'key=value'"),
+                .ok_or_else(|| OrchestratorError::Config {
+                    reason: format!(
+                        "invalid pair '{entry}' in {var_name}, expected format 'key=value'"
+                    ),
                 })?;
             let key = k.trim().to_string();
             let value = v.trim().to_string();
             if key.is_empty() || value.is_empty() {
-                return Err(OrchestratorError::HttpError {
-                    url: format!("config:{var_name}"),
-                    reason: format!("empty key or value in pair '{entry}'"),
+                return Err(OrchestratorError::Config {
+                    reason: format!("empty key or value in pair '{entry}' in {var_name}"),
                 });
             }
             Ok((key, value))
