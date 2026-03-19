@@ -1113,6 +1113,18 @@ checksum = "7c87def4c32ab89d880effc9e097653c8da5d6ef28e6b539d313baaacfbafcbe"
 [[package]]
 name = "orchestrator"
 version = "0.1.0"
+dependencies = [
+ "agent-sdk",
+ "async-trait",
+ "axum",
+ "futures",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "serde_yaml",
+ "tokio",
+ "uuid",
+]
 
 [[package]]
 name = "ordered-float"
