@@ -8,6 +8,7 @@ pub enum OrchestratorError {
     EscalationFailed { chain: Vec<String>, reason: String },
     HttpError { url: String, reason: String },
     Config { reason: String },
+    EmbeddingError { reason: String },
 }
 
 impl fmt::Display for OrchestratorError {
@@ -32,6 +33,9 @@ impl fmt::Display for OrchestratorError {
             }
             OrchestratorError::Config { reason } => {
                 write!(f, "Config error: {}", reason)
+            }
+            OrchestratorError::EmbeddingError { reason } => {
+                write!(f, "Embedding error: {}", reason)
             }
         }
     }
