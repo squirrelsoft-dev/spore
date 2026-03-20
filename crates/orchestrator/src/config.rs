@@ -7,6 +7,12 @@ use crate::error::OrchestratorError;
 #[derive(Debug, Clone, Deserialize)]
 pub struct OrchestratorConfig {
     pub agents: Vec<AgentConfig>,
+    #[serde(default)]
+    pub embedding_provider: Option<String>,
+    #[serde(default)]
+    pub embedding_model: Option<String>,
+    #[serde(default)]
+    pub similarity_threshold: Option<f64>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -40,7 +46,12 @@ impl OrchestratorConfig {
             })
             .collect();
 
-        Ok(OrchestratorConfig { agents })
+        Ok(OrchestratorConfig {
+            agents,
+            embedding_provider: read_optional_env("EMBEDDING_PROVIDER"),
+            embedding_model: read_optional_env("EMBEDDING_MODEL"),
+            similarity_threshold: parse_optional_f64_env("SIMILARITY_THRESHOLD")?,
+        })
     }
 
     pub fn from_file(path: &str) -> Result<Self, OrchestratorError> {
@@ -51,6 +62,25 @@ impl OrchestratorConfig {
         serde_yaml::from_str(&content).map_err(|e| OrchestratorError::Config {
             reason: format!("failed to parse {path}: {e}"),
         })
+    }
+}
+
+fn read_optional_env(name: &str) -> Option<String> {
+    std::env::var(name)
+        .ok()
+        .filter(|v| !v.trim().is_empty())
+        .map(|v| v.trim().to_string())
+}
+
+fn parse_optional_f64_env(name: &str) -> Result<Option<f64>, OrchestratorError> {
+    match read_optional_env(name) {
+        None => Ok(None),
+        Some(val) => val
+            .parse::<f64>()
+            .map(Some)
+            .map_err(|_| OrchestratorError::Config {
+                reason: format!("{name} must be a valid floating-point number, got '{val}'"),
+            }),
     }
 }
 

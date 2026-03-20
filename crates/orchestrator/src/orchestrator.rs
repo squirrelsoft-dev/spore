@@ -10,21 +10,32 @@ use serde_json::json;
 use crate::agent_endpoint::AgentEndpoint;
 use crate::config::OrchestratorConfig;
 use crate::error::OrchestratorError;
+use crate::semantic_router::SemanticRouter;
+use rig::embeddings::EmbeddingModel;
 
 const MAX_ESCALATION_DEPTH: usize = 5;
 
 pub struct Orchestrator {
     registry: HashMap<String, AgentEndpoint>,
     manifest: SkillManifest,
+    semantic_router: Option<SemanticRouter>,
 }
 
 impl Orchestrator {
-    pub fn new(manifest: SkillManifest, agents: Vec<AgentEndpoint>) -> Self {
+    pub fn new(
+        manifest: SkillManifest,
+        agents: Vec<AgentEndpoint>,
+        semantic_router: Option<SemanticRouter>,
+    ) -> Self {
         let registry = agents
             .into_iter()
             .map(|agent| (agent.name.clone(), agent))
             .collect();
-        Self { registry, manifest }
+        Self {
+            registry,
+            manifest,
+            semantic_router,
+        }
     }
 
     pub fn register(&mut self, endpoint: AgentEndpoint) {
@@ -33,10 +44,6 @@ impl Orchestrator {
 
     pub fn route(&self, request: &AgentRequest) -> Result<&AgentEndpoint, OrchestratorError> {
         if let Some(endpoint) = self.route_by_target_agent(request) {
-            return Ok(endpoint);
-        }
-
-        if let Some(endpoint) = self.route_by_description_match(request) {
             return Ok(endpoint);
         }
 
@@ -64,32 +71,93 @@ impl Orchestrator {
             .collect();
 
         let manifest = build_default_manifest();
-        Ok(Self::new(manifest, agents))
+        Ok(Self::new(manifest, agents, None))
     }
 
-    /// Phase 1: Extract target agent name from request context.
-    /// If `context` contains `"target_agent"` but the value is not a string
-    /// (e.g. a number or object), `as_str()` returns `None` and we fall
-    /// through to the description-match heuristic.
+    /// Extracts `target_agent` from request context and looks up the registry.
+    /// Returns `None` if context is absent, `target_agent` is missing or not a
+    /// string, or the named agent is not registered.
     fn route_by_target_agent(&self, request: &AgentRequest) -> Option<&AgentEndpoint> {
         let context = request.context.as_ref()?;
         let target = context.get("target_agent")?.as_str()?;
         self.registry.get(target)
     }
 
-    /// Phase 2 (fallback): Substring heuristic matching against endpoint descriptions.
-    /// This is a placeholder until `SemanticRouter` (issue #16) replaces it with
-    /// ranked scoring. Note: HashMap iteration order is nondeterministic, so when
-    /// multiple endpoints match, the one returned is arbitrary.
-    fn route_by_description_match(&self, request: &AgentRequest) -> Option<&AgentEndpoint> {
-        let input_lower = request.input.to_lowercase();
-        self.registry.values().find(|endpoint| {
-            let desc_lower = endpoint.description.to_lowercase();
-            desc_lower
-                .split_whitespace()
-                .filter(|word| word.len() >= 3)
-                .any(|word| input_lower.contains(word))
+    /// Routes using the semantic router to find the best matching agent.
+    /// Returns `NoRoute` if no semantic router is configured or no match found.
+    async fn route_semantic<M: EmbeddingModel>(
+        &self,
+        model: &M,
+        request: &AgentRequest,
+    ) -> Result<&AgentEndpoint, OrchestratorError> {
+        let router = self.semantic_router.as_ref().ok_or_else(|| {
+            OrchestratorError::NoRoute {
+                input: request.input.clone(),
+            }
+        })?;
+
+        let agent_name = router.route(model, request).await?;
+
+        self.registry.get(&agent_name).ok_or_else(|| {
+            OrchestratorError::NoRoute {
+                input: request.input.clone(),
+            }
         })
+    }
+
+    /// Three-phase routing: (1) target_agent context, (2) semantic similarity,
+    /// (3) NoRoute error.
+    async fn route_with_model<M: EmbeddingModel>(
+        &self,
+        request: &AgentRequest,
+        model: &M,
+    ) -> Result<&AgentEndpoint, OrchestratorError> {
+        if let Some(endpoint) = self.route_by_target_agent(request) {
+            return Ok(endpoint);
+        }
+
+        self.route_semantic(model, request).await
+    }
+
+    /// Dispatches a request using three-phase routing with an embedding model.
+    /// Falls back through target_agent, semantic similarity, then NoRoute.
+    pub async fn dispatch_with_model<M: EmbeddingModel>(
+        &self,
+        request: AgentRequest,
+        model: &M,
+    ) -> Result<AgentResponse, OrchestratorError> {
+        let endpoint = self.route_with_model(&request, model).await?;
+        let response = self.try_invoke(endpoint, &request).await?;
+        let chain = vec![endpoint.name.clone()];
+        self.handle_escalation(response, &request, chain).await
+    }
+
+    /// Builds an orchestrator from config with a semantic router powered by an
+    /// embedding model. Pre-computes embeddings for all configured agent
+    /// descriptions.
+    pub async fn from_config_with_model<M: EmbeddingModel>(
+        config: OrchestratorConfig,
+        model: &M,
+        similarity_threshold: f64,
+    ) -> Result<Self, OrchestratorError> {
+        let client = build_shared_client();
+        let agent_pairs: Vec<(String, String)> = config
+            .agents
+            .iter()
+            .map(|ac| (ac.name.clone(), ac.description.clone()))
+            .collect();
+
+        let router =
+            SemanticRouter::new(model, agent_pairs, similarity_threshold).await?;
+
+        let agents: Vec<AgentEndpoint> = config
+            .agents
+            .into_iter()
+            .map(|ac| AgentEndpoint::new(ac.name, ac.description, ac.url, client.clone()))
+            .collect();
+
+        let manifest = build_default_manifest();
+        Ok(Self::new(manifest, agents, Some(router)))
     }
 
     /// Checks agent health before invoking. This adds an HTTP round-trip per

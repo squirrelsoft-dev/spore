@@ -10,6 +10,8 @@ use axum::{Json, Router};
 use orchestrator::agent_endpoint::AgentEndpoint;
 use orchestrator::error::OrchestratorError;
 use orchestrator::orchestrator::Orchestrator;
+use orchestrator::semantic_router::SemanticRouter;
+use rig::embeddings::{Embedding, EmbeddingError, EmbeddingModel};
 use serde_json::json;
 use tokio::net::TcpListener;
 
@@ -124,6 +126,67 @@ fn build_escalation_response(
 }
 
 // ---------------------------------------------------------------------------
+// Mock embedding model
+// ---------------------------------------------------------------------------
+
+/// A deterministic embedding model for testing semantic routing.
+/// Maps known strings to fixed 3D vectors; unknown strings get a zero vector.
+struct MockEmbeddingModel;
+
+impl MockEmbeddingModel {
+    fn vector_for(text: &str) -> Vec<f64> {
+        match text {
+            "Handles financial queries" => vec![1.0, 0.0, 0.0],
+            "Handles weather forecasts" => vec![0.0, 1.0, 0.0],
+            "What are my expenses?" => vec![0.9, 0.1, 0.0],
+            "random gibberish" => vec![0.33, 0.33, 0.33],
+            _ => vec![0.0, 0.0, 0.0],
+        }
+    }
+}
+
+impl EmbeddingModel for MockEmbeddingModel {
+    const MAX_DOCUMENTS: usize = 1;
+    type Client = ();
+
+    fn make(_client: &Self::Client, _model: impl Into<String>, _dims: Option<usize>) -> Self {
+        MockEmbeddingModel
+    }
+
+    fn ndims(&self) -> usize {
+        3
+    }
+
+    fn embed_texts(
+        &self,
+        texts: impl IntoIterator<Item = String> + Send,
+    ) -> impl std::future::Future<Output = Result<Vec<Embedding>, EmbeddingError>> + Send {
+        let results: Vec<Embedding> = texts
+            .into_iter()
+            .map(|text| {
+                let vec = Self::vector_for(&text);
+                Embedding {
+                    document: text,
+                    vec,
+                }
+            })
+            .collect();
+        async move { Ok(results) }
+    }
+}
+
+/// Builds a `SemanticRouter` with finance and weather agents using the mock model.
+async fn build_semantic_router(model: &MockEmbeddingModel) -> SemanticRouter {
+    let agent_pairs = vec![
+        ("finance-agent".to_string(), "Handles financial queries".to_string()),
+        ("weather-agent".to_string(), "Handles weather forecasts".to_string()),
+    ];
+    SemanticRouter::new(model, agent_pairs, 0.7)
+        .await
+        .expect("failed to build SemanticRouter")
+}
+
+// ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
 
@@ -147,7 +210,7 @@ async fn dispatch_routes_by_context_target() {
     )
     .await;
 
-    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent1, agent2]);
+    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent1, agent2], None);
 
     let request = AgentRequest {
         id: request_id,
@@ -172,7 +235,7 @@ async fn dispatch_returns_no_route() {
     )
     .await;
 
-    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent]);
+    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent], None);
 
     // No target_agent in context and input does not match description keywords.
     let request = AgentRequest {
@@ -202,7 +265,7 @@ async fn dispatch_skips_unhealthy_agent() {
     )
     .await;
 
-    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent]);
+    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent], None);
 
     let request = AgentRequest {
         id: request_id,
@@ -244,7 +307,7 @@ async fn dispatch_handles_escalation() {
     )
     .await;
 
-    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent_a, agent_b]);
+    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent_a, agent_b], None);
 
     let request = AgentRequest {
         id: request_id,
@@ -288,7 +351,7 @@ async fn dispatch_returns_escalation_failed_on_depth() {
     .await;
     agents.push(final_agent);
 
-    let orchestrator = Orchestrator::new(build_test_manifest(), agents);
+    let orchestrator = Orchestrator::new(build_test_manifest(), agents, None);
 
     let request = AgentRequest {
         id: request_id,
@@ -328,7 +391,7 @@ async fn register_adds_dispatchable_agent() {
     )
     .await;
 
-    let mut orchestrator = Orchestrator::new(build_test_manifest(), vec![]);
+    let mut orchestrator = Orchestrator::new(build_test_manifest(), vec![], None);
 
     // Before registration, routing should fail
     let request = AgentRequest {
@@ -372,7 +435,7 @@ async fn health_returns_healthy_with_one_healthy() {
     )
     .await;
 
-    let orchestrator = Orchestrator::new(build_test_manifest(), vec![healthy_agent, unhealthy_agent]);
+    let orchestrator = Orchestrator::new(build_test_manifest(), vec![healthy_agent, unhealthy_agent], None);
 
     // The MicroAgent::health impl aggregates: if any agent is healthy, result is Healthy.
     let status = MicroAgent::health(&orchestrator).await;
@@ -391,7 +454,7 @@ async fn micro_agent_invoke_delegates_to_dispatch() {
     )
     .await;
 
-    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent]);
+    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent], None);
 
     // Use the MicroAgent trait interface
     let trait_ref: &dyn MicroAgent = &orchestrator;
@@ -405,4 +468,178 @@ async fn micro_agent_invoke_delegates_to_dispatch() {
 
     let response = trait_ref.invoke(request).await.unwrap();
     assert_eq!(response.output, json!({"result": "via-trait"}));
+}
+
+// ---------------------------------------------------------------------------
+// Semantic routing tests
+// ---------------------------------------------------------------------------
+
+#[tokio::test]
+async fn dispatch_with_semantic_router_routes_by_intent() {
+    let request_id = uuid::Uuid::new_v4();
+    let model = MockEmbeddingModel;
+
+    let finance_agent = create_mock_endpoint(
+        "finance-agent",
+        "Handles financial queries",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "from-finance"),
+    )
+    .await;
+
+    let weather_agent = create_mock_endpoint(
+        "weather-agent",
+        "Handles weather forecasts",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "from-weather"),
+    )
+    .await;
+
+    let router = build_semantic_router(&model).await;
+    let orchestrator = Orchestrator::new(
+        build_test_manifest(),
+        vec![finance_agent, weather_agent],
+        Some(router),
+    );
+
+    // Route via context.intent matching the agent name
+    let request = AgentRequest {
+        id: request_id,
+        input: "anything".to_string(),
+        context: Some(json!({"intent": "finance-agent"})),
+        caller: None,
+    };
+
+    let response = orchestrator.dispatch_with_model(request, &model).await.unwrap();
+    assert_eq!(response.output, json!({"result": "from-finance"}));
+}
+
+#[tokio::test]
+async fn dispatch_with_semantic_router_routes_by_similarity() {
+    let request_id = uuid::Uuid::new_v4();
+    let model = MockEmbeddingModel;
+
+    let finance_agent = create_mock_endpoint(
+        "finance-agent",
+        "Handles financial queries",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "from-finance"),
+    )
+    .await;
+
+    let weather_agent = create_mock_endpoint(
+        "weather-agent",
+        "Handles weather forecasts",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "from-weather"),
+    )
+    .await;
+
+    let router = build_semantic_router(&model).await;
+    let orchestrator = Orchestrator::new(
+        build_test_manifest(),
+        vec![finance_agent, weather_agent],
+        Some(router),
+    );
+
+    // No target_agent, no intent -- routes via cosine similarity.
+    // "What are my expenses?" [0.9, 0.1, 0.0] is close to finance [1.0, 0.0, 0.0].
+    let request = AgentRequest {
+        id: request_id,
+        input: "What are my expenses?".to_string(),
+        context: None,
+        caller: None,
+    };
+
+    let response = orchestrator.dispatch_with_model(request, &model).await.unwrap();
+    assert_eq!(response.output, json!({"result": "from-finance"}));
+}
+
+#[tokio::test]
+async fn dispatch_with_semantic_router_returns_no_route() {
+    let request_id = uuid::Uuid::new_v4();
+    let model = MockEmbeddingModel;
+
+    let finance_agent = create_mock_endpoint(
+        "finance-agent",
+        "Handles financial queries",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "from-finance"),
+    )
+    .await;
+
+    let weather_agent = create_mock_endpoint(
+        "weather-agent",
+        "Handles weather forecasts",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "from-weather"),
+    )
+    .await;
+
+    let router = build_semantic_router(&model).await;
+    let orchestrator = Orchestrator::new(
+        build_test_manifest(),
+        vec![finance_agent, weather_agent],
+        Some(router),
+    );
+
+    // "random gibberish" [0.33, 0.33, 0.33] has low similarity to both agents
+    // and should not exceed the 0.7 threshold.
+    let request = AgentRequest {
+        id: request_id,
+        input: "random gibberish".to_string(),
+        context: None,
+        caller: None,
+    };
+
+    let result = orchestrator.dispatch_with_model(request, &model).await;
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        OrchestratorError::NoRoute { .. } => {}
+        other => panic!("expected NoRoute, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn dispatch_with_semantic_router_prefers_target_agent_over_intent() {
+    let request_id = uuid::Uuid::new_v4();
+    let model = MockEmbeddingModel;
+
+    let finance_agent = create_mock_endpoint(
+        "finance-agent",
+        "Handles financial queries",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "from-finance"),
+    )
+    .await;
+
+    let weather_agent = create_mock_endpoint(
+        "weather-agent",
+        "Handles weather forecasts",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "from-weather"),
+    )
+    .await;
+
+    let router = build_semantic_router(&model).await;
+    let orchestrator = Orchestrator::new(
+        build_test_manifest(),
+        vec![finance_agent, weather_agent],
+        Some(router),
+    );
+
+    // target_agent points to weather-agent, but intent says finance-agent.
+    // target_agent should take priority (phase 1 of three-phase routing).
+    let request = AgentRequest {
+        id: request_id,
+        input: "anything".to_string(),
+        context: Some(json!({
+            "target_agent": "weather-agent",
+            "intent": "finance-agent"
+        })),
+        caller: None,
+    };
+
+    let response = orchestrator.dispatch_with_model(request, &model).await.unwrap();
+    assert_eq!(response.output, json!({"result": "from-weather"}));
 }

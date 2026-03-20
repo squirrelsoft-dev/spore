@@ -1119,10 +1119,12 @@ dependencies = [
  "axum",
  "futures",
  "reqwest",
+ "rig-core",
  "serde",
  "serde_json",
  "serde_yaml",
  "tokio",
+ "tracing",
  "uuid",
 ]
 
