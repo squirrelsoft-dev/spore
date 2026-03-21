@@ -185,3 +185,70 @@ async fn load_orchestrator_skill() {
         manifest.preamble.contains("route") || manifest.preamble.contains("router")
     );
 }
+
+#[tokio::test]
+async fn load_tool_coder_skill() {
+    let dir = skills_dir();
+    let loader = make_loader(&dir);
+    let manifest = loader.load("tool-coder").await.unwrap();
+
+    assert_eq!(manifest.name, "tool-coder");
+    assert_eq!(manifest.version, "0.1");
+    assert_eq!(
+        manifest.description,
+        "Generates, compiles, and validates Rust MCP tool implementations from specifications"
+    );
+
+    assert_eq!(manifest.model.provider, "anthropic");
+    assert_eq!(manifest.model.name, "claude-sonnet-4-6");
+    assert!((manifest.model.temperature - 0.1).abs() < f64::EPSILON);
+
+    assert_eq!(
+        manifest.tools,
+        vec!["read_file", "write_file", "cargo_build"]
+    );
+
+    assert_eq!(manifest.constraints.max_turns, 15);
+    assert!((manifest.constraints.confidence_threshold - 0.85).abs() < f64::EPSILON);
+    assert_eq!(
+        manifest.constraints.escalate_to,
+        Some("human_reviewer".to_string())
+    );
+    assert_eq!(
+        manifest.constraints.allowed_actions,
+        vec!["read", "write", "execute"]
+    );
+
+    assert_eq!(manifest.output.format, "structured_json");
+    assert_eq!(manifest.output.schema.len(), 3);
+    assert_eq!(
+        manifest.output.schema.get("tools_generated").unwrap(),
+        "string"
+    );
+    assert_eq!(
+        manifest.output.schema.get("compilation_result").unwrap(),
+        "string"
+    );
+    assert_eq!(
+        manifest.output.schema.get("implementation_paths").unwrap(),
+        "string"
+    );
+
+    assert!(!manifest.preamble.is_empty());
+    assert!(
+        manifest.preamble.contains("MCP") || manifest.preamble.contains("mcp"),
+        "preamble should reference MCP"
+    );
+    assert!(
+        manifest.preamble.contains("Rust") || manifest.preamble.contains("rust"),
+        "preamble should reference Rust"
+    );
+    assert!(
+        manifest.preamble.contains("cargo") || manifest.preamble.contains("build"),
+        "preamble should reference cargo or build"
+    );
+    assert!(
+        manifest.preamble.contains("tool-registry") || manifest.preamble.contains("missing tool"),
+        "preamble should reference tool-registry or missing tool"
+    );
+}
