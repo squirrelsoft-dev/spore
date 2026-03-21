@@ -1,0 +1,71 @@
+# Docker Compose configuration for end-to-end testing of Spore agents.
+#
+# NOTE: All services use FROM scratch images which have no shell.
+# Compose-level healthchecks will not work; health polling must be
+# performed externally (e.g., curl http://localhost:808x/health).
+
+networks:
+  spore-e2e:
+    driver: bridge
+
+services:
+  skill-writer:
+    build:
+      context: .
+      args:
+        SKILL_NAME: skill-writer
+    container_name: skill-writer
+    ports:
+      - "8081:8080"
+    environment:
+      - ANTHROPIC_API_KEY
+    networks:
+      - spore-e2e
+
+  tool-coder:
+    build:
+      context: .
+      args:
+        SKILL_NAME: tool-coder
+    container_name: tool-coder
+    ports:
+      - "8082:8080"
+    environment:
+      - ANTHROPIC_API_KEY
+    networks:
+      - spore-e2e
+
+  deploy-agent:
+    build:
+      context: .
+      args:
+        SKILL_NAME: deploy-agent
+    container_name: deploy-agent
+    ports:
+      - "8083:8080"
+    user: "0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      - ANTHROPIC_API_KEY
+    networks:
+      - spore-e2e
+
+  orchestrator:
+    build:
+      context: .
+      args:
+        SKILL_NAME: orchestrator
+    container_name: orchestrator
+    ports:
+      - "8084:8080"
+    environment:
+      - ANTHROPIC_API_KEY
+      - AGENT_ENDPOINTS=skill-writer=http://skill-writer:8080,tool-coder=http://tool-coder:8080,deploy-agent=http://deploy-agent:8080
+      - AGENT_DESCRIPTIONS=skill-writer=Writes skill manifests and YAML definitions,tool-coder=Generates tool source code and MCP endpoints,deploy-agent=Builds and deploys containers via Docker
+    depends_on:
+      - skill-writer
+      - tool-coder
+      - deploy-agent
+    networks:
+      - spore-e2e

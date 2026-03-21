@@ -1,0 +1,12 @@
+agents:
+  - name: skill-writer
+    description: "Produces validated skill files from plain-language descriptions"
+    url: "http://skill-writer:8080"
+  - name: tool-coder
+    description: "Generates, compiles, and validates Rust MCP tool implementations from specifications"
+    url: "http://tool-coder:8080"
+  - name: deploy-agent
+    description: "Packages a runtime binary and skill file into a minimal Docker image, pushes to a registry, and registers the agent with the orchestrator"
+    url: "http://deploy-agent:8080"
+
+similarity_threshold: 0.8
