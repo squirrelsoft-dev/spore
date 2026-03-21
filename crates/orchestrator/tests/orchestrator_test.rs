@@ -125,6 +125,18 @@ fn build_escalation_response(
     }
 }
 
+/// Builds an `AgentResponse` with `escalated: true` but no escalation target.
+fn build_escalated_no_target_response(request_id: uuid::Uuid, output_msg: &str) -> AgentResponse {
+    AgentResponse {
+        id: request_id,
+        output: json!({"result": output_msg}),
+        confidence: 0.5,
+        escalated: true,
+        escalate_to: None,
+        tool_calls: vec![],
+    }
+}
+
 // ---------------------------------------------------------------------------
 // Mock embedding model
 // ---------------------------------------------------------------------------
@@ -321,6 +333,52 @@ async fn dispatch_handles_escalation() {
 }
 
 #[tokio::test]
+async fn dispatch_handles_multi_hop_escalation() {
+    let request_id = uuid::Uuid::new_v4();
+
+    // Agent A escalates to agent-b
+    let agent_a = create_mock_endpoint(
+        "agent-a",
+        "first responder",
+        HealthStatus::Healthy,
+        build_escalation_response(request_id, "agent-b"),
+    )
+    .await;
+
+    // Agent B escalates to agent-c
+    let agent_b = create_mock_endpoint(
+        "agent-b",
+        "second responder",
+        HealthStatus::Healthy,
+        build_escalation_response(request_id, "agent-c"),
+    )
+    .await;
+
+    // Agent C returns a successful response
+    let agent_c = create_mock_endpoint(
+        "agent-c",
+        "final handler",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "handled-by-c"),
+    )
+    .await;
+
+    let orchestrator =
+        Orchestrator::new(build_test_manifest(), vec![agent_a, agent_b, agent_c], None);
+
+    let request = AgentRequest {
+        id: request_id,
+        input: "need help".to_string(),
+        context: Some(json!({"target_agent": "agent-a"})),
+        caller: None,
+    };
+
+    let response = orchestrator.dispatch(request).await.unwrap();
+    assert_eq!(response.output, json!({"result": "handled-by-c"}));
+    assert!(!response.escalated);
+}
+
+#[tokio::test]
 async fn dispatch_returns_escalation_failed_on_depth() {
     let request_id = uuid::Uuid::new_v4();
 
@@ -377,6 +435,117 @@ async fn dispatch_returns_escalation_failed_on_depth() {
         }
         other => panic!("expected EscalationFailed, got: {:?}", other),
     }
+}
+
+#[tokio::test]
+async fn dispatch_returns_escalation_failed_on_cycle() {
+    let request_id = uuid::Uuid::new_v4();
+
+    // Agent A escalates to agent-b
+    let agent_a = create_mock_endpoint(
+        "agent-a",
+        "alpha agent",
+        HealthStatus::Healthy,
+        build_escalation_response(request_id, "agent-b"),
+    )
+    .await;
+
+    // Agent B escalates back to agent-a, creating a cycle
+    let agent_b = create_mock_endpoint(
+        "agent-b",
+        "beta agent",
+        HealthStatus::Healthy,
+        build_escalation_response(request_id, "agent-a"),
+    )
+    .await;
+
+    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent_a, agent_b], None);
+
+    let request = AgentRequest {
+        id: request_id,
+        input: "trigger cycle".to_string(),
+        context: Some(json!({"target_agent": "agent-a"})),
+        caller: None,
+    };
+
+    let result = orchestrator.dispatch(request).await;
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        OrchestratorError::EscalationFailed { chain, reason } => {
+            assert!(
+                reason.contains("cycle detected"),
+                "reason was: {}",
+                reason
+            );
+            assert!(
+                chain.contains(&"agent-a".to_string()),
+                "chain was: {:?}",
+                chain
+            );
+        }
+        other => panic!("expected EscalationFailed, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn dispatch_returns_escalation_failed_on_missing_target() {
+    let request_id = uuid::Uuid::new_v4();
+
+    // Agent A escalates to "nonexistent-agent" which is NOT registered
+    let agent_a = create_mock_endpoint(
+        "agent-a",
+        "first responder",
+        HealthStatus::Healthy,
+        build_escalation_response(request_id, "nonexistent-agent"),
+    )
+    .await;
+
+    // Only register agent-a; "nonexistent-agent" is deliberately absent
+    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent_a], None);
+
+    let request = AgentRequest {
+        id: request_id,
+        input: "escalate to missing".to_string(),
+        context: Some(json!({"target_agent": "agent-a"})),
+        caller: None,
+    };
+
+    let result = orchestrator.dispatch(request).await;
+    assert!(result.is_err());
+    match result.unwrap_err() {
+        OrchestratorError::EscalationFailed { chain, reason } => {
+            assert!(reason.contains("not found in registry"), "reason was: {}", reason);
+            assert!(chain.contains(&"agent-a".to_string()), "chain was: {:?}", chain);
+        }
+        other => panic!("expected EscalationFailed, got: {:?}", other),
+    }
+}
+
+#[tokio::test]
+async fn dispatch_returns_response_when_escalated_without_target() {
+    let request_id = uuid::Uuid::new_v4();
+
+    let agent_a = create_mock_endpoint(
+        "agent-a",
+        "agent that escalates without target",
+        HealthStatus::Healthy,
+        build_escalated_no_target_response(request_id, "no-target-escalation"),
+    )
+    .await;
+
+    let orchestrator = Orchestrator::new(build_test_manifest(), vec![agent_a], None);
+
+    let request = AgentRequest {
+        id: request_id,
+        input: "test escalation without target".to_string(),
+        context: Some(json!({"target_agent": "agent-a"})),
+        caller: None,
+    };
+
+    let response = orchestrator.dispatch(request).await.unwrap();
+    assert_eq!(response.output, json!({"result": "no-target-escalation"}));
+    assert!(response.escalated);
+    assert!(response.escalate_to.is_none());
 }
 
 #[tokio::test]
@@ -642,4 +811,63 @@ async fn dispatch_with_semantic_router_prefers_target_agent_over_intent() {
 
     let response = orchestrator.dispatch_with_model(request, &model).await.unwrap();
     assert_eq!(response.output, json!({"result": "from-weather"}));
+}
+
+#[tokio::test]
+async fn dispatch_with_model_handles_escalation() {
+    let request_id = uuid::Uuid::new_v4();
+    let model = MockEmbeddingModel;
+
+    // finance-agent escalates to escalation-handler
+    let finance_agent = create_mock_endpoint(
+        "finance-agent",
+        "Handles financial queries",
+        HealthStatus::Healthy,
+        build_escalation_response(request_id, "escalation-handler"),
+    )
+    .await;
+
+    let weather_agent = create_mock_endpoint(
+        "weather-agent",
+        "Handles weather forecasts",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "from-weather"),
+    )
+    .await;
+
+    // escalation-handler is registered in the orchestrator but NOT in the
+    // semantic router -- it is only reachable via escalation.
+    let escalation_handler = create_mock_endpoint(
+        "escalation-handler",
+        "Handles escalated requests",
+        HealthStatus::Healthy,
+        build_success_response(request_id, "handled-by-escalation"),
+    )
+    .await;
+
+    let router = build_semantic_router(&model).await;
+    let orchestrator = Orchestrator::new(
+        build_test_manifest(),
+        vec![finance_agent, weather_agent, escalation_handler],
+        Some(router),
+    );
+
+    // No target_agent, no intent -- routes via cosine similarity.
+    // "What are my expenses?" [0.9, 0.1, 0.0] is close to finance [1.0, 0.0, 0.0].
+    // finance-agent escalates to escalation-handler, which returns success.
+    let request = AgentRequest {
+        id: request_id,
+        input: "What are my expenses?".to_string(),
+        context: None,
+        caller: None,
+    };
+
+    let response = orchestrator
+        .dispatch_with_model(request, &model)
+        .await
+        .unwrap();
+    assert_eq!(
+        response.output,
+        json!({"result": "handled-by-escalation"})
+    );
 }
