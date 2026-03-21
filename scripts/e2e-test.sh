@@ -208,7 +208,7 @@ run_step() {
     (
         export SKILL_WRITER_URL="http://localhost:${PORTS[0]}"
         export TOOL_CODER_URL="http://localhost:${PORTS[1]}"
-        export DEPLOY_AGENT_HOST="localhost:${PORTS[2]}"
+        export DEPLOY_AGENT_URL="http://localhost:${PORTS[2]}"
         export ORCHESTRATOR_URL="http://localhost:${PORTS[3]}"
         export ARTIFACTS_DIR="${ARTIFACTS_DIR}"
         bash "${script_path}"

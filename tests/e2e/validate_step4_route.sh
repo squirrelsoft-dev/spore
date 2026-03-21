@@ -9,28 +9,13 @@ set -euo pipefail
 # answers, sufficient confidence, and non-empty tool_calls.
 ###############################################################################
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib.sh"
+
 ORCHESTRATOR_URL="${ORCHESTRATOR_URL:-http://orchestrator:8080}"
-ARTIFACTS_DIR="${ARTIFACTS_DIR:-tests/e2e/artifacts}"
 mkdir -p "${ARTIFACTS_DIR}"
 
 INVOKE_URL="${ORCHESTRATOR_URL}/invoke"
-
-# ---------------------------------------------------------------------------
-# Helpers
-# ---------------------------------------------------------------------------
-
-fail() {
-  echo "[FAIL]  $*" >&2
-  exit 1
-}
-
-log_info() {
-  echo "[INFO]  $*"
-}
-
-log_pass() {
-  echo "[PASS]  $*"
-}
 
 # float_in_range VALUE LOW HIGH
 # Returns 0 (true) if LOW <= VALUE <= HIGH, 1 otherwise.
@@ -68,17 +53,6 @@ extract_number_from_output() {
   return 1
 }
 
-assert_http_ok() {
-  local label="$1" status="$2" artifact="$3"
-  if [ "${status}" != "200" ]; then
-    echo "--- Response body ---" >&2
-    cat "${artifact}" >&2
-    echo "" >&2
-    fail "${label}: expected HTTP 200, got ${status}"
-  fi
-  log_pass "${label}: HTTP 200 OK"
-}
-
 assert_confidence() {
   local label="$1" artifact="$2" threshold="$3"
   local confidence
@@ -114,15 +88,14 @@ send_query() {
   local query="$1"
   local artifact="$2"
   local id
-  id="$(uuidgen 2>/dev/null \
-    || cat /proc/sys/kernel/random/uuid 2>/dev/null \
-    || echo '00000000-0000-4000-8000-000000000001')"
+  id="$(generate_uuid)"
 
   local payload
   payload=$(jq -n \
     --arg id "$id" \
     --arg input "$query" \
-    '{id: $id, input: $input, context: null, caller: null}')
+    --arg caller "$E2E_CALLER" \
+    '{id: $id, input: $input, context: null, caller: $caller}')
 
   local http_code
   http_code=$(curl -s -o "${artifact}" -w '%{http_code}' \

@@ -5,25 +5,15 @@ set -euo pipefail
 # Sends a generated skill file to the tool-coder agent and validates
 # that it produces compiled tools with valid implementation paths.
 
-ARTIFACTS_DIR="${ARTIFACTS_DIR:-tests/e2e/artifacts}"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+source "${SCRIPT_DIR}/lib.sh"
+
 SKILL_FILE="${ARTIFACTS_DIR}/generated-skill.md"
 RESPONSE_FILE="${ARTIFACTS_DIR}/step2-response.json"
 TOOL_CODER_URL="${TOOL_CODER_URL:-http://tool-coder:8080}"
 MAX_RETRIES="${MAX_RETRIES:-3}"
 REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-120}"
 RETRY_DELAY=5
-
-generate_uuid() {
-    if command -v uuidgen &>/dev/null; then
-        uuidgen | tr '[:upper:]' '[:lower:]'
-    elif [[ -f /proc/sys/kernel/random/uuid ]]; then
-        cat /proc/sys/kernel/random/uuid
-    else
-        printf '%04x%04x-%04x-%04x-%04x-%04x%04x%04x' \
-            $RANDOM $RANDOM $RANDOM $(( (RANDOM & 0x0FFF) | 0x4000 )) \
-            $(( (RANDOM & 0x3FFF) | 0x8000 )) $RANDOM $RANDOM $RANDOM
-    fi
-}
 
 validate_response() {
     local response_file="$1"
@@ -102,7 +92,8 @@ for attempt in $(seq 1 "$MAX_RETRIES"); do
     payload=$(jq -n \
         --arg id "$request_id" \
         --arg input "$skill_content" \
-        '{id: $id, input: $input, context: null, caller: "e2e-test"}')
+        --arg caller "$E2E_CALLER" \
+        '{id: $id, input: $input, context: null, caller: $caller}')
 
     # Send request; capture body and HTTP status code
     http_response=$(curl -s -w '\n%{http_code}' \

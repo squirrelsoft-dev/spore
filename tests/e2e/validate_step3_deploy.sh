@@ -6,24 +6,12 @@ set -euo pipefail
 # then validates the structured JSON response.
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ARTIFACTS_DIR="${SCRIPT_DIR}/artifacts"
-DEPLOY_AGENT_HOST="${DEPLOY_AGENT_HOST:-deploy-agent:8080}"
-INVOKE_URL="http://${DEPLOY_AGENT_HOST}/invoke"
+source "${SCRIPT_DIR}/lib.sh"
+
+DEPLOY_AGENT_URL="${DEPLOY_AGENT_URL:-http://deploy-agent:8080}"
+INVOKE_URL="${DEPLOY_AGENT_URL}/invoke"
 CONNECT_TIMEOUT=30
 MAX_TIME=600
-
-log_info() {
-    echo "[step3-validate] INFO: $*"
-}
-
-check_prerequisites() {
-    for cmd in curl jq; do
-        if ! command -v "$cmd" &>/dev/null; then
-            echo "Step 3 FAILED: required command not found: $cmd"
-            exit 1
-        fi
-    done
-}
 
 check_step1_artifact() {
     local skill_file="${ARTIFACTS_DIR}/generated-skill.md"
@@ -45,16 +33,6 @@ check_step2_artifact() {
     log_info "Loaded step 2 artifact: tool_paths=${TOOL_PATHS}"
 }
 
-generate_uuid() {
-    if command -v uuidgen &>/dev/null; then
-        uuidgen
-    elif [[ -f /proc/sys/kernel/random/uuid ]]; then
-        cat /proc/sys/kernel/random/uuid
-    else
-        python3 -c 'import uuid; print(uuid.uuid4())'
-    fi
-}
-
 build_request_payload() {
     local request_id
     request_id="$(generate_uuid)"
@@ -62,6 +40,7 @@ build_request_payload() {
         --arg id "$request_id" \
         --arg skill_path "$SKILL_PATH" \
         --arg tool_paths "$TOOL_PATHS" \
+        --arg caller "$E2E_CALLER" \
         '{
             id: $id,
             input: ("Deploy the agent defined by skill file at " + $skill_path + " with tools at " + $tool_paths),
@@ -69,7 +48,7 @@ build_request_payload() {
                 skill_path: $skill_path,
                 tool_paths: $tool_paths
             },
-            caller: "e2e-test"
+            caller: $caller
         }'
     )"
     log_info "Built request payload with id=${request_id}"
@@ -157,7 +136,7 @@ validate_response() {
 
 main() {
     log_info "Starting step 3 validation against ${INVOKE_URL}"
-    check_prerequisites
+    check_dependencies curl jq
     check_step1_artifact
     check_step2_artifact
     build_request_payload
