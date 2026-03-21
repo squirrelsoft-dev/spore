@@ -122,3 +122,47 @@ async fn load_skill_writer_skill() {
     assert!(!manifest.preamble.is_empty());
     assert!(manifest.preamble.contains('\n'));
 }
+
+#[tokio::test]
+async fn load_orchestrator_skill() {
+    let dir = skills_dir();
+    let loader = make_loader(&dir);
+    let manifest = loader.load("orchestrator").await.unwrap();
+
+    assert_eq!(manifest.name, "orchestrator");
+    assert_eq!(manifest.version, "1.0");
+    assert_eq!(
+        manifest.description,
+        "Routes incoming requests to the best-matching specialized agent based on intent analysis"
+    );
+
+    assert_eq!(manifest.model.provider, "anthropic");
+    assert_eq!(manifest.model.name, "claude-sonnet-4-6");
+    assert!((manifest.model.temperature - 0.1).abs() < f64::EPSILON);
+
+    assert_eq!(manifest.tools, vec!["list_agents", "route_to_agent"]);
+
+    assert_eq!(manifest.constraints.max_turns, 3);
+    assert!((manifest.constraints.confidence_threshold - 0.9).abs() < f64::EPSILON);
+    assert_eq!(manifest.constraints.escalate_to, None);
+    assert_eq!(
+        manifest.constraints.allowed_actions,
+        vec!["route", "discover"]
+    );
+
+    assert_eq!(manifest.output.format, "structured_json");
+    assert_eq!(manifest.output.schema.len(), 2);
+    assert_eq!(
+        manifest.output.schema.get("target_agent").unwrap(),
+        "string"
+    );
+    assert_eq!(
+        manifest.output.schema.get("reasoning").unwrap(),
+        "string"
+    );
+
+    assert!(!manifest.preamble.is_empty());
+    assert!(
+        manifest.preamble.contains("route") || manifest.preamble.contains("router")
+    );
+}
