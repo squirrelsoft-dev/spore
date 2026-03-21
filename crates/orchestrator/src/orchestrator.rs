@@ -1,8 +1,7 @@
 use std::collections::HashMap;
 
 use agent_sdk::{
-    async_trait, AgentError, AgentRequest, AgentResponse, Constraints, HealthStatus, MicroAgent,
-    ModelConfig, OutputSchema, SkillManifest,
+    async_trait, AgentError, AgentRequest, AgentResponse, HealthStatus, MicroAgent, SkillManifest,
 };
 use futures::future::join_all;
 use serde_json::json;
@@ -62,7 +61,10 @@ impl Orchestrator {
         self.handle_escalation(response, &request, chain).await
     }
 
-    pub fn from_config(config: OrchestratorConfig) -> Result<Self, OrchestratorError> {
+    pub fn from_config(
+        config: OrchestratorConfig,
+        manifest: SkillManifest,
+    ) -> Result<Self, OrchestratorError> {
         let client = build_shared_client();
         let agents: Vec<AgentEndpoint> = config
             .agents
@@ -70,7 +72,6 @@ impl Orchestrator {
             .map(|ac| AgentEndpoint::new(ac.name, ac.description, ac.url, client.clone()))
             .collect();
 
-        let manifest = build_default_manifest();
         Ok(Self::new(manifest, agents, None))
     }
 
@@ -137,6 +138,7 @@ impl Orchestrator {
     /// descriptions.
     pub async fn from_config_with_model<M: EmbeddingModel>(
         config: OrchestratorConfig,
+        manifest: SkillManifest,
         model: &M,
         similarity_threshold: f64,
     ) -> Result<Self, OrchestratorError> {
@@ -156,7 +158,6 @@ impl Orchestrator {
             .map(|ac| AgentEndpoint::new(ac.name, ac.description, ac.url, client.clone()))
             .collect();
 
-        let manifest = build_default_manifest();
         Ok(Self::new(manifest, agents, Some(router)))
     }
 
@@ -345,31 +346,6 @@ fn build_shared_client() -> reqwest::Client {
         .timeout(std::time::Duration::from_secs(30))
         .build()
         .expect("failed to build HTTP client")
-}
-
-fn build_default_manifest() -> SkillManifest {
-    SkillManifest {
-        name: "orchestrator".to_string(),
-        version: "0.1.0".to_string(),
-        description: "Routes requests to specialized agents".to_string(),
-        model: ModelConfig {
-            provider: "none".into(),
-            name: "none".into(),
-            temperature: 0.0,
-        },
-        preamble: String::new(),
-        tools: vec![],
-        constraints: Constraints {
-            max_turns: 1,
-            confidence_threshold: 0.0,
-            escalate_to: None,
-            allowed_actions: vec![],
-        },
-        output: OutputSchema {
-            format: "json".into(),
-            schema: HashMap::new(),
-        },
-    }
 }
 
 fn build_escalation_request(
