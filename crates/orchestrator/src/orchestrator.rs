@@ -193,7 +193,15 @@ impl Orchestrator {
 
             let target_name = match current_response.escalate_to {
                 Some(ref name) => name.clone(),
-                None => return Ok(current_response),
+                None => {
+                    tracing::warn!(
+                        source_agent = %current_chain.last().unwrap_or(&"unknown".to_string()),
+                        confidence = current_response.confidence,
+                        chain = ?current_chain,
+                        "agent signaled escalation but provided no target"
+                    );
+                    return Ok(current_response);
+                }
             };
 
             self.validate_escalation_depth(&current_chain)?;
@@ -207,6 +215,15 @@ impl Orchestrator {
                 &current_chain,
             );
 
+            tracing::info!(
+                source_agent = %current_chain.last().unwrap_or(&"unknown".to_string()),
+                target_agent = %target_name,
+                confidence = current_response.confidence,
+                depth = current_chain.len(),
+                chain = ?current_chain,
+                "escalating request to next agent"
+            );
+
             current_response = self.try_invoke(endpoint, &new_request).await?;
             current_chain.push(target_name);
         }
@@ -217,6 +234,12 @@ impl Orchestrator {
         chain: &[String],
     ) -> Result<(), OrchestratorError> {
         if chain.len() >= MAX_ESCALATION_DEPTH {
+            tracing::error!(
+                depth = chain.len(),
+                max_depth = MAX_ESCALATION_DEPTH,
+                chain = ?chain,
+                "escalation depth exceeded"
+            );
             return Err(OrchestratorError::EscalationFailed {
                 chain: chain.to_vec(),
                 reason: format!(
@@ -234,6 +257,11 @@ impl Orchestrator {
         target_name: &str,
     ) -> Result<(), OrchestratorError> {
         if chain.contains(&target_name.to_string()) {
+            tracing::error!(
+                target_agent = %target_name,
+                chain = ?chain,
+                "escalation cycle detected"
+            );
             return Err(OrchestratorError::EscalationFailed {
                 chain: chain.to_vec(),
                 reason: format!("cycle detected: '{}' already in chain", target_name),
