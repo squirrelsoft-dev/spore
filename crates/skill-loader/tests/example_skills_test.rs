@@ -120,7 +120,26 @@ async fn load_skill_writer_skill() {
     );
 
     assert!(!manifest.preamble.is_empty());
-    assert!(manifest.preamble.contains('\n'));
+    assert!(
+        manifest.preamble.contains("SkillManifest") || manifest.preamble.contains("skill file format"),
+        "preamble should reference the skill manifest schema or file format"
+    );
+    assert!(
+        manifest.preamble.contains("confidence_threshold"),
+        "preamble should document the confidence_threshold constraint"
+    );
+    assert!(
+        manifest.preamble.contains("ModelConfig") || manifest.preamble.contains("model"),
+        "preamble should document model configuration"
+    );
+    assert!(
+        manifest.preamble.contains("OutputSchema") || manifest.preamble.contains("output format"),
+        "preamble should document the output format or schema"
+    );
+    assert!(
+        manifest.preamble.contains("validation") || manifest.preamble.contains("Validation"),
+        "preamble should include validation rules or guidance"
+    );
 }
 
 #[tokio::test]
