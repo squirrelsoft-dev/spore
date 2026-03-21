@@ -183,6 +183,43 @@ docker cp <container_id>:/agent-runtime ./agent-runtime
 
 2. **Temporarily switch to `FROM alpine`.** Replace `FROM scratch` with `FROM alpine` in the final stage of the Dockerfile. This adds a shell and common utilities so you can `docker exec -it <container_id> /bin/sh` into the running container for interactive debugging. Remember to switch back to `FROM scratch` for production builds.
 
+## E2E Testing
+
+The end-to-end test exercises the full bootstrap pipeline: skill writing, tool coding, deployment, and orchestrator routing, all running inside Docker containers against a real LLM.
+
+### Prerequisites
+
+- Docker and docker compose v2
+- `ANTHROPIC_API_KEY` environment variable set
+- Sufficient API credits (see [Cost Considerations](#cost-considerations))
+- Successful `cargo build` (images are built from source)
+
+### Running the Test
+
+```sh
+./scripts/e2e-test.sh
+```
+
+Or via cargo:
+
+```sh
+cargo test --features e2e -- --ignored e2e_bootstrap_test
+```
+
+### Expected Runtime
+
+5-10 minutes depending on Docker build cache and LLM response times. Use `--timeout` to adjust the deadline (default: 600s).
+
+### Debugging Failures
+
+- Check `tests/e2e/artifacts/` for intermediate outputs (generated skill file, tool code, deploy response, routing response)
+- Use `--no-cleanup` to keep containers running after the test finishes for manual inspection
+- View container logs: `docker compose -f docker-compose.e2e.yml logs`
+
+### Cost Considerations
+
+Each run invokes 4-12 LLM API calls. Be mindful of API costs during development.
+
 ## Key Properties
 
 **Single-responsibility agents.** Each agent does one thing. Debug, test, and version them independently.
