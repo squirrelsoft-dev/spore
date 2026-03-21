@@ -252,3 +252,74 @@ async fn load_tool_coder_skill() {
         "preamble should reference tool-registry or missing tool"
     );
 }
+
+#[tokio::test]
+async fn load_deploy_agent_skill() {
+    let dir = skills_dir();
+    let loader = make_loader(&dir);
+    let manifest = loader.load("deploy-agent").await.unwrap();
+
+    assert_eq!(manifest.name, "deploy-agent");
+    assert_eq!(manifest.version, "0.1");
+    assert_eq!(
+        manifest.description,
+        "Packages a runtime binary and skill file into a minimal Docker image, pushes to a registry, and registers the agent with the orchestrator"
+    );
+
+    assert_eq!(manifest.model.provider, "anthropic");
+    assert_eq!(manifest.model.name, "claude-sonnet-4-6");
+    assert!((manifest.model.temperature - 0.1).abs() < f64::EPSILON);
+
+    assert_eq!(
+        manifest.tools,
+        vec!["docker_build", "docker_push", "register_agent"]
+    );
+
+    assert_eq!(manifest.constraints.max_turns, 10);
+    assert!((manifest.constraints.confidence_threshold - 0.9).abs() < f64::EPSILON);
+    assert_eq!(
+        manifest.constraints.escalate_to,
+        Some("human_reviewer".to_string())
+    );
+    assert_eq!(
+        manifest.constraints.allowed_actions,
+        vec!["read", "execute", "deploy"]
+    );
+
+    assert_eq!(manifest.output.format, "structured_json");
+    assert_eq!(manifest.output.schema.len(), 3);
+    assert_eq!(
+        manifest.output.schema.get("image_uri").unwrap(),
+        "string"
+    );
+    assert_eq!(
+        manifest.output.schema.get("endpoint_url").unwrap(),
+        "string"
+    );
+    assert_eq!(
+        manifest.output.schema.get("health_check").unwrap(),
+        "string"
+    );
+
+    assert!(!manifest.preamble.is_empty());
+    assert!(
+        manifest.preamble.contains("Docker") || manifest.preamble.contains("docker") || manifest.preamble.contains("container"),
+        "preamble should reference Docker or containerization"
+    );
+    assert!(
+        manifest.preamble.contains("registry") || manifest.preamble.contains("push"),
+        "preamble should reference pushing to a registry"
+    );
+    assert!(
+        manifest.preamble.contains("orchestrator") || manifest.preamble.contains("register"),
+        "preamble should reference registering with the orchestrator"
+    );
+    assert!(
+        manifest.preamble.contains("health") || manifest.preamble.contains("verify"),
+        "preamble should reference health checks or verification"
+    );
+    assert!(
+        manifest.preamble.contains("scratch") || manifest.preamble.contains("minimal"),
+        "preamble should reference minimal/scratch-based images"
+    );
+}
