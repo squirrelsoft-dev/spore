@@ -16,6 +16,9 @@ debug/
 .DS_Store
 Thumbs.db
 
+# Test artifacts
+tests/e2e/artifacts/
+
 # Environment
 .env
 .env.*

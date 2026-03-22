@@ -17,6 +17,7 @@ members = [
     "crates/orchestrator",
     "tools/echo-tool",
     "tools/read-file",
+    "tools/write-file",
 ]
 
 [profile.release]
