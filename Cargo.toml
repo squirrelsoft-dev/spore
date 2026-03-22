@@ -16,6 +16,7 @@ members = [
     "crates/agent-runtime",
     "crates/orchestrator",
     "tools/echo-tool",
+    "tools/read-file",
 ]
 
 [profile.release]
