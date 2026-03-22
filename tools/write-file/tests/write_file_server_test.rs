@@ -107,7 +107,6 @@ async fn tools_call_write_file_creates_file() {
         "file content should match what was written"
     );
 
-    // Clean up the temporary file
     let _ = std::fs::remove_file(&file_path);
 
     client.cancel().await.expect("failed to cancel client");

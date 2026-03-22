@@ -28,19 +28,12 @@ impl WriteFileTool {
     }
 }
 
-fn validate_write_path(path: &str) -> Result<(), String> {
-    if path.is_empty() {
-        return Err("Path must not be empty".to_string());
-    }
-    Ok(())
-}
-
 #[tool_router]
 impl WriteFileTool {
     #[tool(description = "Write content to a file on disk, creating parent directories as needed")]
     fn write_file(&self, Parameters(request): Parameters<WriteFileRequest>) -> String {
-        if let Err(e) = validate_write_path(&request.path) {
-            return e;
+        if request.path.is_empty() {
+            return "Path must not be empty".to_string();
         }
 
         if let Some(parent) = Path::new(&request.path).parent()
