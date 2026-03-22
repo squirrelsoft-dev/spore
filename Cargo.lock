@@ -1984,6 +1984,7 @@ name = "skill-loader"
 version = "0.1.0"
 dependencies = [
  "agent-sdk",
+ "mcp-test-utils",
  "serde",
  "serde_yaml",
  "tempfile",

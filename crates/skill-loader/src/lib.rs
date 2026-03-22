@@ -141,6 +141,14 @@ mod tests {
     }
 
     #[test]
+    fn parse_content_accepts_markdown_output_format() {
+        let content = mcp_test_utils::valid_skill_content()
+            .replace("format: json", "format: markdown");
+        let manifest = parse_content(&content).unwrap();
+        assert_eq!(manifest.output.format, "markdown");
+    }
+
+    #[test]
     fn parse_content_body_is_trimmed() {
         let content = mcp_test_utils::valid_skill_content().replace(
             "This is the preamble body.",

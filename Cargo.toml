@@ -21,7 +21,6 @@ members = [
     "tools/read-file",
     "tools/write-file",
     "tools/validate-skill",
-    "crates/mcp-test-utils",
 ]
 
 [profile.release]

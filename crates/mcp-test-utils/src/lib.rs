@@ -61,6 +61,17 @@ pub async fn assert_single_tool(
         .get("properties")
         .expect("input_schema should have properties");
 
+    if let Some(obj) = properties.as_object() {
+        assert_eq!(
+            obj.len(),
+            expected_params.len(),
+            "expected {} properties but found {}: {:?}",
+            expected_params.len(),
+            obj.len(),
+            obj.keys().collect::<Vec<_>>()
+        );
+    }
+
     for param in expected_params {
         assert!(
             properties.get(*param).is_some(),
