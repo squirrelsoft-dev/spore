@@ -21,6 +21,7 @@ members = [
     "tools/read-file",
     "tools/write-file",
     "tools/validate-skill",
+    "tools/cargo-build",
 ]
 
 [profile.release]
