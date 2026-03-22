@@ -12,6 +12,40 @@ use std::sync::Arc;
 use agent_sdk::SkillManifest;
 use tool_registry::ToolRegistry;
 
+/// Parses a skill file's raw string content into a `SkillManifest`
+/// without performing any filesystem I/O or validation.
+///
+/// Callers are responsible for running [`validate`] separately if needed.
+pub fn parse_content(content: &str) -> Result<SkillManifest, SkillError> {
+    let placeholder = PathBuf::from("<content>");
+
+    let (yaml, body) =
+        frontmatter::extract_frontmatter(content).map_err(|err| match err {
+            SkillError::ParseError { source, .. } => SkillError::ParseError {
+                path: placeholder.clone(),
+                source,
+            },
+            other => other,
+        })?;
+
+    let fm: frontmatter::SkillFrontmatter =
+        serde_yaml::from_str(yaml).map_err(|err| SkillError::ParseError {
+            path: placeholder,
+            source: err.to_string(),
+        })?;
+
+    Ok(SkillManifest {
+        name: fm.name,
+        version: fm.version,
+        description: fm.description,
+        model: fm.model,
+        preamble: body.trim().to_string(),
+        tools: fm.tools,
+        constraints: fm.constraints,
+        output: fm.output,
+    })
+}
+
 pub struct SkillLoader {
     skill_dir: PathBuf,
     #[allow(dead_code)]
@@ -42,7 +76,7 @@ impl SkillLoader {
                 source: err.to_string(),
             })?;
 
-        let (yaml, body) = frontmatter::extract_frontmatter(&content).map_err(|err| match err {
+        let manifest = parse_content(&content).map_err(|err| match err {
             SkillError::ParseError { source, .. } => SkillError::ParseError {
                 path: path.clone(),
                 source,
@@ -50,23 +84,96 @@ impl SkillLoader {
             other => other,
         })?;
 
-        let fm: frontmatter::SkillFrontmatter =
-            serde_yaml::from_str(yaml).map_err(|err| SkillError::ParseError {
-                path: path.clone(),
-                source: err.to_string(),
-            })?;
-
-        let manifest = SkillManifest {
-            name: fm.name,
-            version: fm.version,
-            description: fm.description,
-            model: fm.model,
-            preamble: body.trim().to_string(),
-            tools: fm.tools,
-            constraints: fm.constraints,
-            output: fm.output,
-        };
         validate(&manifest, &*self.tool_checker)?;
         Ok(manifest)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn valid_frontmatter() -> String {
+        r#"---
+name: test-skill
+version: "1.0.0"
+description: A test skill
+model:
+  provider: openai
+  name: gpt-4
+  temperature: 0.7
+tools:
+  - read_file
+  - write_file
+constraints:
+  confidence_threshold: 0.8
+  max_turns: 5
+  allowed_actions:
+    - read
+    - write
+output:
+  format: markdown
+  schema:
+    result: string
+---
+This is the preamble body."#
+            .to_string()
+    }
+
+    #[test]
+    fn parse_content_valid_returns_expected_manifest() {
+        let content = valid_frontmatter();
+        let manifest = parse_content(&content).unwrap();
+
+        assert_eq!(manifest.name, "test-skill");
+        assert_eq!(manifest.version, "1.0.0");
+        assert_eq!(manifest.description, "A test skill");
+        assert_eq!(manifest.model.provider, "openai");
+        assert_eq!(manifest.model.name, "gpt-4");
+        assert_eq!(manifest.tools, vec!["read_file", "write_file"]);
+        assert_eq!(manifest.preamble, "This is the preamble body.");
+        assert_eq!(manifest.output.format, "markdown");
+    }
+
+    #[test]
+    fn parse_content_missing_opening_delimiter_returns_parse_error() {
+        let content = "name: test\nversion: 1.0\n---\nbody";
+        let err = parse_content(content).unwrap_err();
+        assert!(matches!(err, SkillError::ParseError { .. }));
+        if let SkillError::ParseError { path, source } = &err {
+            assert_eq!(path, &PathBuf::from("<content>"));
+            assert!(source.contains("opening"));
+        }
+    }
+
+    #[test]
+    fn parse_content_missing_closing_delimiter_returns_parse_error() {
+        let content = "---\nname: test\nversion: 1.0\nno closing";
+        let err = parse_content(content).unwrap_err();
+        assert!(matches!(err, SkillError::ParseError { .. }));
+        if let SkillError::ParseError { path, source } = &err {
+            assert_eq!(path, &PathBuf::from("<content>"));
+            assert!(source.contains("closing"));
+        }
+    }
+
+    #[test]
+    fn parse_content_invalid_yaml_fields_returns_parse_error() {
+        let content = "---\nunknown_only: true\n---\nbody";
+        let err = parse_content(content).unwrap_err();
+        assert!(matches!(err, SkillError::ParseError { .. }));
+        if let SkillError::ParseError { path, .. } = &err {
+            assert_eq!(path, &PathBuf::from("<content>"));
+        }
+    }
+
+    #[test]
+    fn parse_content_body_is_trimmed() {
+        let content = valid_frontmatter().replace(
+            "This is the preamble body.",
+            "  \n  Trimmed body text.  \n  ",
+        );
+        let manifest = parse_content(&content).unwrap();
+        assert_eq!(manifest.preamble, "Trimmed body text.");
     }
 }
