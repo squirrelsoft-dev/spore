@@ -1,0 +1,17 @@
+[package]
+name = "docker-push"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+mcp-tool-harness = { path = "../../crates/mcp-tool-harness" }
+rmcp = { version = "1", features = ["transport-io", "server", "macros"] }
+tokio = { version = "1", features = ["macros", "rt", "io-std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+
+[dev-dependencies]
+mcp-test-utils = { path = "../../crates/mcp-test-utils" }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
+rmcp = { version = "1", features = ["client", "transport-child-process"] }
+serde_json = "1"
