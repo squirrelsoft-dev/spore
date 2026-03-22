@@ -72,7 +72,7 @@ async fn tools_call_write_file_creates_file() {
     let client = spawn_write_file_client().await;
 
     let temp_dir = std::env::temp_dir();
-    let file_path = temp_dir.join("spore_write_file_test.txt");
+    let file_path = temp_dir.join(format!("spore_write_file_test_{}.txt", std::process::id()));
     let expected_content = "Hello from write_file integration test!";
 
     let params = CallToolRequestParams::new("write_file").with_arguments(
