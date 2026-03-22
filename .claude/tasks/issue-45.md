@@ -32,7 +32,7 @@ _Depends on: Group 1._
          - Returns a confirmation message with the number of bytes written and the path on success (e.g., `"Wrote 1234 bytes to /path/to/file"`).
          - Returns a descriptive error string on failure (permission denied, disk full, invalid path).
       4. A `#[tool_handler]` impl of `ServerHandler` with `get_info()` returning capabilities with tools enabled (identical to echo-tool pattern).
-      Keep the `write_file` method under 50 lines by extracting validation into a helper function (e.g., `validate_write_path`).
+      Keep the `write_file` method under 50 lines. Path validation is inlined as a simple guard clause.
       Files: `tools/write-file/src/write_file.rs`
       Blocked by: "Add `tools/write-file` to workspace members"
       Blocking: "Write unit tests"

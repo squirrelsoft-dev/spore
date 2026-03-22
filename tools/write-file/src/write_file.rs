@@ -114,11 +114,7 @@ mod tests {
     async fn write_file_empty_path() {
         let tool = WriteFileTool::new();
         let result = call_write_file(&tool, "", "some content");
-        assert!(
-            result.contains("must not be empty") || result.contains("empty"),
-            "Expected descriptive error for empty path, got: {}",
-            result
-        );
+        assert_eq!(result, "Path must not be empty");
     }
 
     #[tokio::test]
