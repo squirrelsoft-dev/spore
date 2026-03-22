@@ -1,0 +1,10 @@
+[package]
+name = "mcp-test-utils"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+rmcp = { version = "1", features = ["client", "transport-child-process"] }
+serde_json = "1"
+tokio = { version = "1", features = ["process"] }

@@ -93,36 +93,9 @@ impl SkillLoader {
 mod tests {
     use super::*;
 
-    fn valid_frontmatter() -> String {
-        r#"---
-name: test-skill
-version: "1.0.0"
-description: A test skill
-model:
-  provider: openai
-  name: gpt-4
-  temperature: 0.7
-tools:
-  - read_file
-  - write_file
-constraints:
-  confidence_threshold: 0.8
-  max_turns: 5
-  allowed_actions:
-    - read
-    - write
-output:
-  format: markdown
-  schema:
-    result: string
----
-This is the preamble body."#
-            .to_string()
-    }
-
     #[test]
     fn parse_content_valid_returns_expected_manifest() {
-        let content = valid_frontmatter();
+        let content = mcp_test_utils::valid_skill_content();
         let manifest = parse_content(&content).unwrap();
 
         assert_eq!(manifest.name, "test-skill");
@@ -132,7 +105,7 @@ This is the preamble body."#
         assert_eq!(manifest.model.name, "gpt-4");
         assert_eq!(manifest.tools, vec!["read_file", "write_file"]);
         assert_eq!(manifest.preamble, "This is the preamble body.");
-        assert_eq!(manifest.output.format, "markdown");
+        assert_eq!(manifest.output.format, "json");
     }
 
     #[test]
@@ -168,8 +141,16 @@ This is the preamble body."#
     }
 
     #[test]
+    fn parse_content_accepts_markdown_output_format() {
+        let content = mcp_test_utils::valid_skill_content()
+            .replace("format: json", "format: markdown");
+        let manifest = parse_content(&content).unwrap();
+        assert_eq!(manifest.output.format, "markdown");
+    }
+
+    #[test]
     fn parse_content_body_is_trimmed() {
-        let content = valid_frontmatter().replace(
+        let content = mcp_test_utils::valid_skill_content().replace(
             "This is the preamble body.",
             "  \n  Trimmed body text.  \n  ",
         );

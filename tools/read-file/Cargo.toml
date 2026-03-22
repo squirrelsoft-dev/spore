@@ -8,10 +8,10 @@ rmcp = { version = "1", features = ["transport-io", "server", "macros"] }
 tokio = { version = "1", features = ["macros", "rt", "io-std"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-tracing = "0.1"
-tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+mcp-tool-harness = { path = "../../crates/mcp-tool-harness" }
 
 [dev-dependencies]
 tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread"] }
 rmcp = { version = "1", features = ["client", "transport-child-process"] }
 serde_json = "1"
+mcp-test-utils = { path = "../../crates/mcp-test-utils" }

@@ -1,99 +1,18 @@
-use rmcp::{
-    model::CallToolRequestParams,
-    service::RunningService,
-    transport::TokioChildProcess,
-    RoleClient, ServiceExt,
-};
-use tokio::process::Command;
-
-/// Spawn the validate-skill binary as a child process and connect an MCP client.
-async fn spawn_validate_skill_client() -> RunningService<RoleClient, ()> {
-    let transport =
-        TokioChildProcess::new(Command::new(env!("CARGO_BIN_EXE_validate-skill")))
-            .expect("failed to spawn validate-skill");
-
-    ().serve(transport)
-        .await
-        .expect("failed to connect to validate-skill server")
-}
-
-fn valid_skill_content() -> String {
-    r#"---
-name: test-skill
-version: "1.0.0"
-description: A test skill
-model:
-  provider: openai
-  name: gpt-4
-  temperature: 0.7
-tools:
-  - read_file
-  - write_file
-constraints:
-  confidence_threshold: 0.8
-  max_turns: 5
-  allowed_actions:
-    - read
-    - write
-output:
-  format: json
-  schema:
-    result: string
----
-This is the preamble body."#
-        .to_string()
-}
+use mcp_test_utils::{assert_single_tool, spawn_mcp_client, valid_skill_content};
+use rmcp::model::CallToolRequestParams;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tools_list_returns_validate_skill_tool() {
-    let client = spawn_validate_skill_client().await;
+async fn tools_list_validates_single_tool() {
+    let client = spawn_mcp_client!(env!("CARGO_BIN_EXE_validate-skill")).await;
 
-    let tools_result = client.peer().list_tools(None).await.expect("list_tools");
-    assert_eq!(tools_result.tools.len(), 1, "expected exactly 1 tool");
-    assert_eq!(tools_result.tools[0].name, "validate_skill");
-
-    client.cancel().await.expect("failed to cancel client");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tools_list_has_correct_description() {
-    let client = spawn_validate_skill_client().await;
-
-    let tools_result = client.peer().list_tools(None).await.expect("list_tools");
-    let tool = &tools_result.tools[0];
-    let description = tool
-        .description
-        .as_deref()
-        .expect("validate_skill tool should have a description");
-    assert!(
-        description.contains("Validate"),
-        "unexpected description: {description}"
-    );
-
-    client.cancel().await.expect("failed to cancel client");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tools_list_has_content_parameter() {
-    let client = spawn_validate_skill_client().await;
-
-    let tools_result = client.peer().list_tools(None).await.expect("list_tools");
-    let tool = &tools_result.tools[0];
-    let properties = tool
-        .input_schema
-        .get("properties")
-        .expect("input_schema should have properties");
-    assert!(
-        properties.get("content").is_some(),
-        "input_schema properties should contain 'content'"
-    );
+    assert_single_tool(&client, "validate_skill", "Validate", &["content"]).await;
 
     client.cancel().await.expect("failed to cancel client");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tools_call_with_valid_skill_returns_valid_true() {
-    let client = spawn_validate_skill_client().await;
+    let client = spawn_mcp_client!(env!("CARGO_BIN_EXE_validate-skill")).await;
 
     let params = CallToolRequestParams::new("validate_skill").with_arguments(
         serde_json::json!({ "content": valid_skill_content() })
@@ -132,7 +51,7 @@ async fn tools_call_with_valid_skill_returns_valid_true() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tools_call_with_missing_frontmatter_returns_valid_false() {
-    let client = spawn_validate_skill_client().await;
+    let client = spawn_mcp_client!(env!("CARGO_BIN_EXE_validate-skill")).await;
 
     let params = CallToolRequestParams::new("validate_skill").with_arguments(
         serde_json::json!({ "content": "no frontmatter here" })
@@ -164,7 +83,7 @@ async fn tools_call_with_missing_frontmatter_returns_valid_false() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tools_call_with_invalid_yaml_returns_valid_false() {
-    let client = spawn_validate_skill_client().await;
+    let client = spawn_mcp_client!(env!("CARGO_BIN_EXE_validate-skill")).await;
 
     let params = CallToolRequestParams::new("validate_skill").with_arguments(
         serde_json::json!({ "content": "---\nunknown_only: true\n---\nbody" })

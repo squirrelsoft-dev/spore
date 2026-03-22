@@ -73,33 +73,6 @@ impl ServerHandler for ValidateSkillTool {
 mod tests {
     use super::*;
 
-    fn valid_content() -> String {
-        r#"---
-name: test-skill
-version: "1.0.0"
-description: A test skill
-model:
-  provider: openai
-  name: gpt-4
-  temperature: 0.7
-tools:
-  - read_file
-  - write_file
-constraints:
-  confidence_threshold: 0.8
-  max_turns: 5
-  allowed_actions:
-    - read
-    - write
-output:
-  format: json
-  schema:
-    result: string
----
-This is the preamble body."#
-            .to_string()
-    }
-
     fn call_validate(tool: &ValidateSkillTool, content: &str) -> serde_json::Value {
         let result = tool.validate_skill(Parameters(ValidateSkillRequest {
             content: content.to_string(),
@@ -110,7 +83,7 @@ This is the preamble body."#
     #[tokio::test]
     async fn valid_content_returns_success() {
         let tool = ValidateSkillTool::new();
-        let result = call_validate(&tool, &valid_content());
+        let result = call_validate(&tool, &mcp_test_utils::valid_skill_content());
 
         assert_eq!(result["valid"], true);
         let errors = result["errors"].as_array().unwrap();
