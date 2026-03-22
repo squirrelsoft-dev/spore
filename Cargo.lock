@@ -2396,6 +2396,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "validate-skill"
+version = "0.1.0"
+dependencies = [
+ "agent-sdk",
+ "rmcp 1.2.0",
+ "serde",
+ "serde_json",
+ "skill-loader",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "valuable"
 version = "0.1.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"

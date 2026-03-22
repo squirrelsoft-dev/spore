@@ -4,7 +4,6 @@ use rmcp::{
     schemars, tool, tool_handler, tool_router, ServerHandler,
 };
 
-/// Request payload for the validate_skill tool.
 #[derive(Debug, serde::Deserialize, schemars::JsonSchema)]
 pub struct ValidateSkillRequest {
     /// The raw skill file content (markdown with YAML frontmatter) to validate.
