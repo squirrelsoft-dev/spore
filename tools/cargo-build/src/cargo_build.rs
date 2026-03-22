@@ -56,7 +56,7 @@ impl CargoBuildTool {
                 "success": output.status.success(),
                 "stdout": String::from_utf8_lossy(&output.stdout),
                 "stderr": String::from_utf8_lossy(&output.stderr),
-                "exit_code": output.status.code(),
+                "exit_code": output.status.code().unwrap_or(-1),
             })
             .to_string(),
             Err(e) => serde_json::json!({
@@ -86,26 +86,32 @@ mod tests {
         }))
     }
 
-    #[tokio::test]
-    async fn rejects_invalid_package_name() {
+    #[test]
+    fn rejects_invalid_package_name() {
         let tool = CargoBuildTool::new();
         let result = call_cargo_build(&tool, "foo; rm -rf /", None);
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert_eq!(json["success"], false);
-        assert!(json["stderr"].as_str().unwrap().contains("Invalid package name"));
+        assert!(json["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("Invalid package name"));
     }
 
-    #[tokio::test]
-    async fn rejects_package_with_path_separator() {
+    #[test]
+    fn rejects_package_with_path_separator() {
         let tool = CargoBuildTool::new();
         let result = call_cargo_build(&tool, "../evil", None);
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
         assert_eq!(json["success"], false);
-        assert!(json["stderr"].as_str().unwrap().contains("Invalid package name"));
+        assert!(json["stderr"]
+            .as_str()
+            .unwrap()
+            .contains("Invalid package name"));
     }
 
-    #[tokio::test]
-    async fn validates_clean_package_name() {
+    #[test]
+    fn validates_clean_package_name() {
         let tool = CargoBuildTool::new();
         let result = call_cargo_build(&tool, "echo-tool", None);
         let json: serde_json::Value = serde_json::from_str(&result).unwrap();
