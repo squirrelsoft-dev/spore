@@ -14,11 +14,14 @@ members = [
     "crates/skill-loader",
     "crates/tool-registry",
     "crates/agent-runtime",
+    "crates/mcp-tool-harness",
     "crates/orchestrator",
+    "crates/mcp-test-utils",
     "tools/echo-tool",
     "tools/read-file",
     "tools/write-file",
     "tools/validate-skill",
+    "crates/mcp-test-utils",
 ]
 
 [profile.release]

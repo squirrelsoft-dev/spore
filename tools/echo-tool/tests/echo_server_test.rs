@@ -1,71 +1,15 @@
-use rmcp::{
-    model::CallToolRequestParams,
-    service::RunningService,
-    transport::TokioChildProcess,
-    RoleClient, ServiceExt,
-};
-use tokio::process::Command;
-
-/// Spawn the echo-tool binary as a child process and connect an MCP client.
-async fn spawn_echo_client() -> RunningService<RoleClient, ()> {
-    let transport = TokioChildProcess::new(Command::new(env!("CARGO_BIN_EXE_echo-tool")))
-        .expect("failed to spawn echo-tool");
-
-    ().serve(transport)
-        .await
-        .expect("failed to connect to echo-tool server")
-}
+use rmcp::model::CallToolRequestParams;
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tools_list_returns_echo_tool() {
-    let client = spawn_echo_client().await;
-
-    let tools_result = client.peer().list_tools(None).await.expect("list_tools");
-    assert_eq!(tools_result.tools.len(), 1, "expected exactly 1 tool");
-    assert_eq!(tools_result.tools[0].name, "echo");
-
-    client.cancel().await.expect("failed to cancel client");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tools_list_echo_has_correct_description() {
-    let client = spawn_echo_client().await;
-
-    let tools_result = client.peer().list_tools(None).await.expect("list_tools");
-    let tool = &tools_result.tools[0];
-    let description = tool
-        .description
-        .as_deref()
-        .expect("echo tool should have a description");
-    assert!(
-        description.contains("Returns the input message unchanged"),
-        "unexpected description: {description}"
-    );
-
-    client.cancel().await.expect("failed to cancel client");
-}
-
-#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
-async fn tools_list_echo_has_message_parameter() {
-    let client = spawn_echo_client().await;
-
-    let tools_result = client.peer().list_tools(None).await.expect("list_tools");
-    let tool = &tools_result.tools[0];
-    let properties = tool
-        .input_schema
-        .get("properties")
-        .expect("input_schema should have properties");
-    assert!(
-        properties.get("message").is_some(),
-        "input_schema properties should contain 'message'"
-    );
-
+async fn tools_list_validates_echo_tool() {
+    let client = mcp_test_utils::spawn_mcp_client!(env!("CARGO_BIN_EXE_echo-tool")).await;
+    mcp_test_utils::assert_single_tool(&client, "echo", "Returns the input message unchanged", &["message"]).await;
     client.cancel().await.expect("failed to cancel client");
 }
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tools_call_echo_returns_message() {
-    let client = spawn_echo_client().await;
+    let client = mcp_test_utils::spawn_mcp_client!(env!("CARGO_BIN_EXE_echo-tool")).await;
 
     let params = CallToolRequestParams::new("echo").with_arguments(
         serde_json::json!({ "message": "hello" })
@@ -94,7 +38,7 @@ async fn tools_call_echo_returns_message() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tools_call_echo_preserves_unicode() {
-    let client = spawn_echo_client().await;
+    let client = mcp_test_utils::spawn_mcp_client!(env!("CARGO_BIN_EXE_echo-tool")).await;
 
     let unicode_message = "Hej verden! \u{1F30D} \u{00E9}\u{00E8}\u{00EA} \u{4F60}\u{597D}";
     let params = CallToolRequestParams::new("echo").with_arguments(

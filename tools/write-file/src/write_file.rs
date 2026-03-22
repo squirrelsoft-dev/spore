@@ -64,7 +64,6 @@ impl ServerHandler for WriteFileTool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::env;
     use std::fs;
 
     fn call_write_file(tool: &WriteFileTool, path: &str, content: &str) -> String {
@@ -74,19 +73,9 @@ mod tests {
         }))
     }
 
-    fn unique_temp_dir(test_name: &str) -> std::path::PathBuf {
-        let dir = env::temp_dir()
-            .join("write_file_tests")
-            .join(test_name)
-            .join(format!("{}", std::process::id()));
-        let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).expect("failed to create temp dir");
-        dir
-    }
-
     #[tokio::test]
     async fn write_file_creates_file_with_content() {
-        let dir = unique_temp_dir("creates_file_with_content");
+        let dir = mcp_test_utils::unique_temp_dir("creates_file_with_content");
         let tool = WriteFileTool::new();
         let file_path = dir.join("output.txt");
 
@@ -99,7 +88,7 @@ mod tests {
 
     #[tokio::test]
     async fn write_file_creates_parent_directories() {
-        let dir = unique_temp_dir("creates_parent_dirs");
+        let dir = mcp_test_utils::unique_temp_dir("creates_parent_dirs");
         let tool = WriteFileTool::new();
         let file_path = dir.join("a").join("b").join("c").join("file.txt");
 
@@ -119,7 +108,7 @@ mod tests {
 
     #[tokio::test]
     async fn write_file_returns_byte_count() {
-        let dir = unique_temp_dir("returns_byte_count");
+        let dir = mcp_test_utils::unique_temp_dir("returns_byte_count");
         let tool = WriteFileTool::new();
         let file_path = dir.join("count.txt");
         let content = "twelve chars";
@@ -138,7 +127,7 @@ mod tests {
 
     #[tokio::test]
     async fn write_file_overwrites_existing() {
-        let dir = unique_temp_dir("overwrites_existing");
+        let dir = mcp_test_utils::unique_temp_dir("overwrites_existing");
         let tool = WriteFileTool::new();
         let file_path = dir.join("overwrite.txt");
 
@@ -152,7 +141,7 @@ mod tests {
 
     #[tokio::test]
     async fn write_file_preserves_unicode() {
-        let dir = unique_temp_dir("preserves_unicode");
+        let dir = mcp_test_utils::unique_temp_dir("preserves_unicode");
         let tool = WriteFileTool::new();
         let file_path = dir.join("unicode.txt");
         let content = "\u{1F600} hello \u{00E9}\u{00E8}\u{00EA} \u{4E16}\u{754C}";
