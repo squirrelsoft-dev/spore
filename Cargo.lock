@@ -3008,6 +3008,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "write-file"
+version = "0.1.0"
+dependencies = [
+ "rmcp 1.2.0",
+ "serde",
+ "serde_json",
+ "tokio",
+ "tracing",
+ "tracing-subscriber",
+]
+
+[[package]]
 name = "writeable"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
