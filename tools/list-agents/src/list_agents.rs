@@ -36,23 +36,21 @@ struct AgentInfo {
 ///
 /// Format: "name1=url1,name2=url2". Trims whitespace, rejects empty keys/values.
 fn parse_endpoints(raw: &str) -> Result<Vec<(String, String)>, String> {
-    let mut results = Vec::new();
-    for entry in raw.split(',') {
-        let entry = entry.trim();
-        if entry.is_empty() {
-            continue;
-        }
-        let (key, value) = entry
-            .split_once('=')
-            .ok_or_else(|| format!("invalid pair '{entry}', expected 'key=value'"))?;
-        let key = key.trim().to_string();
-        let value = value.trim().to_string();
-        if key.is_empty() || value.is_empty() {
-            return Err(format!("empty key or value in pair '{entry}'"));
-        }
-        results.push((key, value));
-    }
-    Ok(results)
+    raw.split(',')
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .map(|entry| {
+            let (key, value) = entry
+                .split_once('=')
+                .ok_or_else(|| format!("invalid pair '{entry}', expected 'key=value'"))?;
+            let key = key.trim();
+            let value = value.trim();
+            if key.is_empty() || value.is_empty() {
+                return Err(format!("empty key or value in pair '{entry}'"));
+            }
+            Ok((key.to_string(), value.to_string()))
+        })
+        .collect()
 }
 
 /// Parse a raw AGENT_DESCRIPTIONS string into a map of name -> description.

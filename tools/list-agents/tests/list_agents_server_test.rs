@@ -35,12 +35,7 @@ async fn tools_call_returns_empty_when_no_agents() {
     let client =
         spawn_client_with_env(&[], &["AGENT_ENDPOINTS", "AGENT_DESCRIPTIONS"]).await;
 
-    let params = CallToolRequestParams::new("list_agents").with_arguments(
-        serde_json::json!({})
-            .as_object()
-            .unwrap()
-            .clone(),
-    );
+    let params = CallToolRequestParams::new("list_agents");
     let result = client
         .peer()
         .call_tool(params)
@@ -80,12 +75,7 @@ async fn tools_call_returns_agents_from_env() {
     )
     .await;
 
-    let params = CallToolRequestParams::new("list_agents").with_arguments(
-        serde_json::json!({})
-            .as_object()
-            .unwrap()
-            .clone(),
-    );
+    let params = CallToolRequestParams::new("list_agents");
     let result = client
         .peer()
         .call_tool(params)

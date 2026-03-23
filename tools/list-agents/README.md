@@ -43,7 +43,7 @@ The tool returns a JSON response with the following fields:
 | Field    | Type   | Description                                              |
 |----------|--------|----------------------------------------------------------|
 | `agents` | array  | Array of agent objects with `name`, `url`, `description` |
-| `error`  | string | Error message (empty on success, present on failure)     |
+| `error`  | string | Optional error message. Only present on failure.         |
 
 ### Success example
 
