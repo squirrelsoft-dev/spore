@@ -1,0 +1,19 @@
+[package]
+name = "route-to-agent"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+agent-sdk = { path = "../../crates/agent-sdk" }
+mcp-tool-harness = { path = "../../crates/mcp-tool-harness" }
+rmcp = { version = "1", features = ["transport-io", "server", "macros"] }
+tokio = { version = "1", features = ["macros", "rt", "io-std"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+reqwest = { version = "0.13", features = ["json"] }
+
+[dev-dependencies]
+mcp-test-utils = { path = "../../crates/mcp-test-utils" }
+tokio = { version = "1", features = ["macros", "rt", "rt-multi-thread", "net"] }
+rmcp = { version = "1", features = ["client", "transport-child-process"] }
+serde_json = "1"
