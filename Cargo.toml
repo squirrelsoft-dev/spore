@@ -26,6 +26,7 @@ members = [
     "tools/cargo-build",
     "tools/docker-push",
     "tools/docker-build",
+    "tools/route-to-agent",
 ]
 
 [profile.release]
