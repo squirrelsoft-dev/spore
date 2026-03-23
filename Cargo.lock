@@ -355,6 +355,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "docker-build"
+version = "0.1.0"
+dependencies = [
+ "mcp-test-utils",
+ "mcp-tool-harness",
+ "rmcp 1.2.0",
+ "serde",
+ "serde_json",
+ "tokio",
+]
+
+[[package]]
 name = "dunce"
 version = "1.0.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
