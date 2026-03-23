@@ -19,6 +19,7 @@ members = [
     "crates/mcp-test-utils",
     "tools/echo-tool",
     "tools/read-file",
+    "tools/register-agent",
     "tools/write-file",
     "tools/validate-skill",
     "tools/cargo-build",
