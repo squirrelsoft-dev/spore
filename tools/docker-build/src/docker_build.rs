@@ -81,35 +81,25 @@ fn validate_build_args(args: &HashMap<String, String>) -> Result<(), String> {
 }
 
 fn extract_image_id(output: &str) -> String {
-    // Legacy format: "Successfully built <id>"
-    if let Some(line) = output.lines().find(|l| l.contains("Successfully built "))
-        && let Some(id) = line.split("Successfully built ").nth(1)
-    {
-        let id = id.trim();
-        if !id.is_empty() {
-            return id.to_string();
+    for line in output.lines() {
+        // Legacy format: "Successfully built <id>"
+        if let Some(id) = line.split("Successfully built ").nth(1) {
+            let id = id.trim();
+            if !id.is_empty() {
+                return id.to_string();
+            }
         }
-    }
 
-    // BuildKit format: "writing image sha256:<id>"
-    if let Some(line) = output.lines().find(|l| l.contains("writing image sha256:"))
-        && let Some(rest) = line.split("writing image sha256:").nth(1)
-    {
-        let id = rest.split_whitespace().next().unwrap_or("").trim();
-        if !id.is_empty() {
-            return format!("sha256:{id}");
+        // BuildKit format: "writing image sha256:<id>"
+        if let Some(rest) = line.split("writing image sha256:").nth(1) {
+            let id = rest.split_whitespace().next().unwrap_or("").trim();
+            if !id.is_empty() {
+                return format!("sha256:{id}");
+            }
         }
     }
 
     String::new()
-}
-
-fn build_error(message: &str) -> String {
-    serde_json::json!({
-        "success": false,
-        "build_log": message,
-    })
-    .to_string()
 }
 
 fn execute_docker_build(
@@ -162,24 +152,34 @@ fn execute_docker_build(
 impl DockerBuildTool {
     #[tool(description = "Run docker build and return the result with image ID")]
     fn docker_build(&self, Parameters(request): Parameters<DockerBuildRequest>) -> String {
+        let error_response = |message: String| -> String {
+            serde_json::json!({
+                "success": false,
+                "image_id": "",
+                "tag": &request.tag,
+                "build_log": message,
+            })
+            .to_string()
+        };
+
         if let Err(msg) = validate_path(&request.context, "context path") {
-            return build_error(&msg);
+            return error_response(msg);
         }
 
         if !validate_tag(&request.tag) {
-            return build_error(&format!("Invalid tag: {}", request.tag));
+            return error_response(format!("Invalid tag: {}", request.tag));
         }
 
         if let Some(ref df) = request.dockerfile
             && let Err(msg) = validate_path(df, "dockerfile path")
         {
-            return build_error(&msg);
+            return error_response(msg);
         }
 
         if let Some(ref args) = request.build_args
             && let Err(msg) = validate_build_args(args)
         {
-            return build_error(&msg);
+            return error_response(msg);
         }
 
         execute_docker_build(

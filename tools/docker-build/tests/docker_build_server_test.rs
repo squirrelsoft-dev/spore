@@ -37,6 +37,11 @@ async fn tools_call_rejects_path_traversal() {
         .expect("first content should be text");
     let json: serde_json::Value = serde_json::from_str(&text.text).expect("should parse as JSON");
     assert_eq!(json["success"], false, "path traversal should be rejected");
+    assert_eq!(json["tag"], "test:latest");
+    assert!(json["build_log"]
+        .as_str()
+        .unwrap()
+        .contains("path traversal"));
 
     client.cancel().await.expect("failed to cancel client");
 }
@@ -65,6 +70,11 @@ async fn tools_call_rejects_invalid_tag() {
         .expect("first content should be text");
     let json: serde_json::Value = serde_json::from_str(&text.text).expect("should parse as JSON");
     assert_eq!(json["success"], false, "invalid tag should be rejected");
+    assert_eq!(json["tag"], "test;evil");
+    assert!(json["build_log"]
+        .as_str()
+        .unwrap()
+        .contains("Invalid tag"));
 
     client.cancel().await.expect("failed to cancel client");
 }
