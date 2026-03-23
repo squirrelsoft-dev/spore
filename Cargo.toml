@@ -18,6 +18,7 @@ members = [
     "crates/orchestrator",
     "crates/mcp-test-utils",
     "tools/echo-tool",
+    "tools/list-agents",
     "tools/read-file",
     "tools/register-agent",
     "tools/write-file",
