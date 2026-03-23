@@ -23,6 +23,7 @@ members = [
     "tools/validate-skill",
     "tools/cargo-build",
     "tools/docker-push",
+    "tools/docker-build",
 ]
 
 [profile.release]
