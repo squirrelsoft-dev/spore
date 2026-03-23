@@ -93,7 +93,7 @@ When `filter` is set to `"skill"`, only agents whose name or description contain
 ```json
 {
   "agents": [],
-  "error": "AGENT_ENDPOINTS is not set"
+  "error": "invalid pair 'bad-entry', expected 'key=value'"
 }
 ```
 
@@ -101,7 +101,7 @@ When `filter` is set to `"skill"`, only agents whose name or description contain
 
 | Variable              | Required | Description                                                    |
 |-----------------------|----------|----------------------------------------------------------------|
-| `AGENT_ENDPOINTS`     | yes      | Comma-separated list of `name=url` pairs (e.g. `a=http://a:8080,b=http://b:9090`) |
+| `AGENT_ENDPOINTS`     | no       | Comma-separated list of `name=url` pairs (e.g. `a=http://a:8080,b=http://b:9090`). Returns empty array if unset. |
 | `AGENT_DESCRIPTIONS`  | no       | Comma-separated list of `name=description` pairs (e.g. `a=My agent,b=Other agent`) |
 
 `AGENT_ENDPOINTS` defines which agents are available. Each entry is a `name=url` pair separated by commas. Whitespace around names and URLs is trimmed.
