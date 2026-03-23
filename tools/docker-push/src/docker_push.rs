@@ -64,7 +64,9 @@ fn resolve_image_ref(image: &str, registry_url: Option<&str>) -> Result<String, 
 
     validate_registry_url(&url)?;
     let url = url.trim_end_matches('/');
-    if image.starts_with(url) {
+    if image.starts_with(url)
+        && (image.len() == url.len() || image.as_bytes().get(url.len()) == Some(&b'/'))
+    {
         Ok(image.to_string())
     } else {
         Ok(format!("{url}/{image}"))
@@ -74,9 +76,12 @@ fn resolve_image_ref(image: &str, registry_url: Option<&str>) -> Result<String, 
 fn extract_digest(output: &str) -> String {
     for line in output.lines() {
         if let Some(pos) = line.find("digest: sha256:") {
-            let token_start = pos + "digest: ".len();
-            let token = &line[token_start..];
-            return token.split_whitespace().next().unwrap_or("").to_string();
+            let digest_part = &line[pos + "digest: ".len()..];
+            if let Some(digest) = digest_part.split_whitespace().next() {
+                if digest.starts_with("sha256:") && digest.len() > "sha256:".len() {
+                    return digest.to_string();
+                }
+            }
         }
     }
     String::new()
@@ -210,6 +215,12 @@ mod tests {
         let result =
             resolve_image_ref("ghcr.io/spore/spore-agent:0.1", Some("ghcr.io/spore")).unwrap();
         assert_eq!(result, "ghcr.io/spore/spore-agent:0.1");
+    }
+
+    #[test]
+    fn registry_url_partial_prefix_does_not_match() {
+        let result = resolve_image_ref("myreg-app/image:latest", Some("myreg")).unwrap();
+        assert_eq!(result, "myreg/myreg-app/image:latest");
     }
 
     #[test]
