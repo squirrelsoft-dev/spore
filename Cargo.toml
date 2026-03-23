@@ -19,11 +19,13 @@ members = [
     "crates/mcp-test-utils",
     "tools/echo-tool",
     "tools/read-file",
+    "tools/register-agent",
     "tools/write-file",
     "tools/validate-skill",
     "tools/cargo-build",
     "tools/docker-push",
     "tools/docker-build",
+    "tools/register-agent",
 ]
 
 [profile.release]
