@@ -17,12 +17,22 @@ pub struct RegisterAgentRequest {
 #[derive(Debug, Clone)]
 pub struct RegisterAgentTool {
     tool_router: ToolRouter<Self>,
+    orchestrator_url: Option<String>,
 }
 
 impl RegisterAgentTool {
     pub fn new() -> Self {
         Self {
             tool_router: Self::tool_router(),
+            orchestrator_url: None,
+        }
+    }
+
+    #[cfg(test)]
+    fn with_orchestrator_url(url: &str) -> Self {
+        Self {
+            tool_router: Self::tool_router(),
+            orchestrator_url: Some(url.to_string()),
         }
     }
 }
@@ -92,7 +102,10 @@ impl RegisterAgentTool {
             );
         }
 
-        let base_url = resolve_orchestrator_url();
+        let base_url = self
+            .orchestrator_url
+            .clone()
+            .unwrap_or_else(resolve_orchestrator_url);
         let register_url = format!("{base_url}/register");
 
         let payload = serde_json::json!({
@@ -101,7 +114,12 @@ impl RegisterAgentTool {
             "description": request.description,
         });
 
-        let result = reqwest::Client::new()
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(30))
+            .build()
+            .unwrap_or_else(|_| reqwest::Client::new());
+
+        let result = client
             .post(&register_url)
             .json(&payload)
             .send()
@@ -113,6 +131,7 @@ impl RegisterAgentTool {
                     "success": true,
                     "agent_name": request.name,
                     "registered_url": request.url,
+                    "error": "",
                 })
                 .to_string()
             }
@@ -236,7 +255,13 @@ mod tests {
 
         let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
         let addr = listener.local_addr().unwrap();
-        let response_line = format!("HTTP/1.1 {status} OK\r\n");
+        let reason = match status {
+            200 => "OK",
+            400 => "Bad Request",
+            500 => "Internal Server Error",
+            _ => "Unknown",
+        };
+        let response_line = format!("HTTP/1.1 {status} {reason}\r\n");
         let body = body.to_string();
 
         tokio::spawn(async move {
@@ -264,22 +289,13 @@ mod tests {
         port
     }
 
-    /// Mutex that serializes tests which manipulate the ORCHESTRATOR_URL env var,
-    /// preventing race conditions when the test harness runs tests in parallel.
-    static ENV_MUTEX: std::sync::Mutex<()> = std::sync::Mutex::new(());
-
-    /// Call register_agent against a specific orchestrator URL via env var.
-    /// Acquires ENV_MUTEX to prevent parallel env var races.
+    /// Call register_agent against a specific orchestrator URL using the
+    /// `with_orchestrator_url` constructor, avoiding env var mutation.
     async fn call_register_with_orchestrator(orchestrator_url: &str) -> serde_json::Value {
-        let _guard = ENV_MUTEX.lock().unwrap();
-        // Safety: test-only env manipulation; required unsafe in Rust 2024 edition.
-        // The ENV_MUTEX guard ensures no other test reads/writes this var concurrently.
-        unsafe { std::env::set_var("ORCHESTRATOR_URL", orchestrator_url) };
-        let tool = RegisterAgentTool::new();
+        let tool = RegisterAgentTool::with_orchestrator_url(orchestrator_url);
         let result =
             call_register_agent(&tool, "test-agent", "http://localhost:9999", "A test agent")
                 .await;
-        unsafe { std::env::remove_var("ORCHESTRATOR_URL") };
         serde_json::from_str(&result).unwrap()
     }
 

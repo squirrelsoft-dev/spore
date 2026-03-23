@@ -34,7 +34,7 @@ cargo test -p register-agent
 
 | Name          | Type   | Required | Description                              |
 |---------------|--------|----------|------------------------------------------|
-| `name`        | string | yes      | Agent name (alphanumeric, hyphens, underscores)  |
+| `name`        | string | yes      | Agent name (alphanumeric, hyphens, underscores, dots) |
 | `url`         | string | yes      | Agent endpoint URL (must be valid URL format)    |
 | `description` | string | yes      | Human-readable description of the agent          |
 
@@ -81,7 +81,7 @@ The `ORCHESTRATOR_URL` environment variable sets the base URL for the orchestrat
 
 ## Security Considerations
 
-- **Name validation** -- Agent names are restricted to ASCII alphanumeric characters and `._-`. Shell metacharacters and whitespace are rejected.
+- **Name validation** -- Agent names are restricted to ASCII alphanumeric characters, dots, underscores, and hyphens (`._-`). Shell metacharacters and whitespace are rejected.
 - **URL validation** -- URLs must begin with `http://` or `https://`. Other schemes and empty values are rejected.
 - **Description validation** -- Descriptions must be non-empty to prevent registering agents without meaningful metadata.
 - **No shell execution** -- The tool sends HTTP requests directly via `reqwest` without spawning a shell, preventing shell injection attacks.
