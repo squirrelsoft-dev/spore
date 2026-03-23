@@ -114,10 +114,19 @@ impl RegisterAgentTool {
             "description": request.description,
         });
 
-        let client = reqwest::Client::builder()
+        let client = match reqwest::Client::builder()
+            .connect_timeout(std::time::Duration::from_secs(5))
             .timeout(std::time::Duration::from_secs(30))
             .build()
-            .unwrap_or_else(|_| reqwest::Client::new());
+        {
+            Ok(c) => c,
+            Err(e) => {
+                return build_error_json(
+                    &request.name,
+                    &format!("Failed to create HTTP client: {e}"),
+                );
+            }
+        };
 
         let result = client
             .post(&register_url)

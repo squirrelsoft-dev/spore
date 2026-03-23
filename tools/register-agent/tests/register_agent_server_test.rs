@@ -50,6 +50,9 @@ async fn tools_call_with_empty_name_returns_error() {
 
 #[tokio::test(flavor = "multi_thread", worker_threads = 2)]
 async fn tools_call_with_valid_inputs_returns_structured_json() {
+    // Point orchestrator to a localhost port that will refuse connections quickly,
+    // avoiding DNS resolution delays for the default http://orchestrator:8080.
+    unsafe { std::env::set_var("ORCHESTRATOR_URL", "http://127.0.0.1:1") };
     let client =
         mcp_test_utils::spawn_mcp_client!(env!("CARGO_BIN_EXE_register-agent")).await;
 
