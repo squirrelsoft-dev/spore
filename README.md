@@ -238,4 +238,4 @@ Serverless, but for agents. The runtime is the execution environment, the skill 
 
 ## License
 
-[MIT](LICENSE) © squirrelsoft-dev
+[MIT](LICENSE) © SquirrelSoft LLC
